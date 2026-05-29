@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --turo-green: #1D9E75;
+  --turo-green-dark: #0F6E56;
+  --turo-green-light: #ecfdf5;
+  --turo-green-muted: #d1fae5;
+  --sidebar-bg: #0F172A;
+  --sidebar-text: #94A3B8;
+  --sidebar-active: #1D9E75;
+  --page-bg: #F1F5F9;
+  --card-bg: #FFFFFF;
+  --border: #E2E8F0;
+  --text-primary: #0F172A;
+  --text-secondary: #64748B;
+  --text-muted: #94A3B8;
+}
+
+* { box-sizing: border-box; }
+
+html { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--page-bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+/* Form inputs - consistent focus ring */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--turo-green) !important;
+  box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
+}
+
+/* Chat message formatting */
+.prose-chat p { margin-bottom: 0.5rem; line-height: 1.6; }
+.prose-chat ul { list-style: disc; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+.prose-chat li { margin-bottom: 0.25rem; }
+.prose-chat strong { font-weight: 600; }
+.prose-chat h3 { font-size: 0.875rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.25rem; }
+
+/* Table row hover */
+.data-table tbody tr:hover { background: #F8FAFC; }
+
+/* Status badge base */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  letter-spacing: 0.01em;
+  text-transform: capitalize;
+}
