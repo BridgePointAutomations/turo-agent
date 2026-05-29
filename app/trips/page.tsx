@@ -2,7 +2,15 @@
 import { useEffect, useState } from 'react'
 import type { Trip, Vehicle } from '@/lib/types'
 
-const EMPTY = { vehicle_id:'', guest_name:'', start_date:'', end_date:'', daily_rate:65, gross_revenue:0, turo_fee_pct:25, guest_rating:5, host_rating:5.0, miles_added:0, notes:'', status:'completed' as const }
+const EMPTY = {
+  vehicle_id: '', guest_name: '', start_date: '', end_date: '',
+  daily_rate: 65, gross_revenue: 0, turo_fee_pct: 25,
+  guest_rating: 5, host_rating: 5.0,
+  start_mileage: '' as string | number,
+  end_mileage: '' as string | number,
+  actual_payout: '' as string | number,
+  notes: '', status: 'completed' as const,
+}
 
 const STATUS_CFG: Record<string, { bg: string; text: string }> = {
   completed: { bg: '#F0FDF4', text: '#16A34A' },
@@ -20,6 +28,8 @@ export default function TripsPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [filter, setFilter] = useState('')
 
   useEffect(() => { load() }, [])
@@ -37,14 +47,45 @@ export default function TripsPage() {
     }
   }
 
+  function milesAdded() {
+    const s = Number(form.start_mileage)
+    const e = Number(form.end_mileage)
+    if (s > 0 && e > s) return e - s
+    return null
+  }
+
   async function save() {
     setSaving(true)
-    await fetch('/api/trips', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(form) })
-    setSaving(false); setShowForm(false); setForm(EMPTY); load()
+    let receipt_url: string | undefined
+
+    if (receiptFile) {
+      setUploading(true)
+      const fd = new FormData()
+      fd.append('file', receiptFile)
+      fd.append('bucket', 'trip-receipts')
+      fd.append('folder', `trip-${Date.now()}`)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const result = await res.json()
+      if (result.url) receipt_url = result.url
+      setUploading(false)
+    }
+
+    const payload: Record<string, unknown> = { ...form }
+    if (form.start_mileage !== '') payload.start_mileage = Number(form.start_mileage)
+    else delete payload.start_mileage
+    if (form.end_mileage !== '') payload.end_mileage = Number(form.end_mileage)
+    else delete payload.end_mileage
+    if (form.actual_payout !== '') payload.actual_payout = Number(form.actual_payout)
+    else delete payload.actual_payout
+    if (receipt_url) payload.receipt_url = receipt_url
+
+    await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    setSaving(false); setShowForm(false); setForm(EMPTY); setReceiptFile(null); load()
   }
 
   const filtered = filter ? trips.filter(t => t.vehicle_id === filter) : trips
   const totalNet = filtered.reduce((s, t) => s + Number(t.net_revenue || 0), 0)
+  const miles = milesAdded()
 
   return (
     <div className="p-7 max-w-5xl mx-auto">
@@ -81,74 +122,96 @@ export default function TripsPage() {
           <h2 className="text-base font-semibold mb-1" style={{ color: '#0F172A' }}>Log a trip</h2>
           <p className="text-sm mb-5" style={{ color: '#64748B' }}>Record your trip details and revenue</p>
           <div className="grid grid-cols-2 gap-4">
+            {/* Vehicle */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Vehicle</label>
-              <select value={form.vehicle_id} onChange={e => setForm(p => ({...p, vehicle_id: e.target.value}))}
+              <select value={form.vehicle_id} onChange={e => setForm(p => ({ ...p, vehicle_id: e.target.value }))}
                 className={inputCls} style={inputStyle}>
                 <option value="">Select vehicle</option>
                 {vehicles.map(v => <option key={v.id} value={v.id}>{v.year} {v.make} {v.model}</option>)}
               </select>
             </div>
+            {/* Guest */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Guest name</label>
               <input type="text" placeholder="John D." value={form.guest_name}
-                onChange={e => setForm(p => ({...p, guest_name: e.target.value}))}
+                onChange={e => setForm(p => ({ ...p, guest_name: e.target.value }))}
                 className={inputCls} style={inputStyle}/>
             </div>
+            {/* Dates */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Start date</label>
               <input type="date" value={form.start_date}
-                onChange={e => setForm(p => ({...p, start_date: e.target.value}))} onBlur={calcGross}
+                onChange={e => setForm(p => ({ ...p, start_date: e.target.value }))} onBlur={calcGross}
                 className={inputCls} style={inputStyle}/>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>End date</label>
               <input type="date" value={form.end_date}
-                onChange={e => setForm(p => ({...p, end_date: e.target.value}))} onBlur={calcGross}
+                onChange={e => setForm(p => ({ ...p, end_date: e.target.value }))} onBlur={calcGross}
                 className={inputCls} style={inputStyle}/>
             </div>
+            {/* Revenue */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Daily rate ($)</label>
               <input type="number" value={form.daily_rate} onBlur={calcGross}
-                onChange={e => setForm(p => ({...p, daily_rate: Number(e.target.value)}))}
+                onChange={e => setForm(p => ({ ...p, daily_rate: Number(e.target.value) }))}
                 className={inputCls} style={inputStyle}/>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Gross revenue ($)</label>
               <input type="number" value={form.gross_revenue}
-                onChange={e => setForm(p => ({...p, gross_revenue: Number(e.target.value)}))}
+                onChange={e => setForm(p => ({ ...p, gross_revenue: Number(e.target.value) }))}
                 className={inputCls} style={inputStyle}/>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Turo fee plan</label>
-              <select value={form.turo_fee_pct} onChange={e => setForm(p => ({...p, turo_fee_pct: Number(e.target.value)}))}
+              <select value={form.turo_fee_pct} onChange={e => setForm(p => ({ ...p, turo_fee_pct: Number(e.target.value) }))}
                 className={inputCls} style={inputStyle}>
-                <option value={15}>Basic (15%)</option>
-                <option value={25}>Standard (25%)</option>
-                <option value={35}>Premium (35%)</option>
+                <option value={10}>More earnings (90% kept)</option>
+                <option value={20}>Balanced (80% kept)</option>
+                <option value={30}>More peace of mind (70% kept)</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Miles added</label>
-              <input type="number" value={form.miles_added}
-                onChange={e => setForm(p => ({...p, miles_added: Number(e.target.value)}))}
+              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Actual Turo payout received ($)</label>
+              <input type="number" placeholder="Optional — reconcile with expected" value={form.actual_payout}
+                onChange={e => setForm(p => ({ ...p, actual_payout: e.target.value }))}
+                className={inputCls} style={inputStyle}/>
+            </div>
+            {/* Odometer */}
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Start mileage (odometer)</label>
+              <input type="number" placeholder="e.g. 24500" value={form.start_mileage}
+                onChange={e => setForm(p => ({ ...p, start_mileage: e.target.value }))}
                 className={inputCls} style={inputStyle}/>
             </div>
             <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>End mileage (odometer)</label>
+              <input type="number" placeholder="e.g. 24850" value={form.end_mileage}
+                onChange={e => setForm(p => ({ ...p, end_mileage: e.target.value }))}
+                className={inputCls} style={inputStyle}/>
+              {miles !== null && (
+                <p className="text-xs mt-1" style={{ color: '#64748B' }}>{miles.toLocaleString()} miles added</p>
+              )}
+            </div>
+            {/* Ratings */}
+            <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Guest rating (1–5)</label>
               <input type="number" min={1} max={5} value={form.guest_rating}
-                onChange={e => setForm(p => ({...p, guest_rating: Number(e.target.value)}))}
+                onChange={e => setForm(p => ({ ...p, guest_rating: Number(e.target.value) }))}
                 className={inputCls} style={inputStyle}/>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Host rating received</label>
               <input type="number" min={1} max={5} step={0.1} value={form.host_rating}
-                onChange={e => setForm(p => ({...p, host_rating: Number(e.target.value)}))}
+                onChange={e => setForm(p => ({ ...p, host_rating: Number(e.target.value) }))}
                 className={inputCls} style={inputStyle}/>
             </div>
+            {/* Status */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Status</label>
-              <select value={form.status} onChange={e => setForm(p => ({...p, status: e.target.value as any}))}
+              <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value as any }))}
                 className={inputCls} style={inputStyle}>
                 <option value="completed">Completed</option>
                 <option value="upcoming">Upcoming</option>
@@ -156,13 +219,26 @@ export default function TripsPage() {
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
+            {/* Notes */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Notes</label>
               <input type="text" placeholder="Optional notes…" value={form.notes}
-                onChange={e => setForm(p => ({...p, notes: e.target.value}))}
+                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                 className={inputCls} style={inputStyle}/>
             </div>
+            {/* Receipt upload — full width */}
+            <div className="col-span-2">
+              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Receipt / Document</label>
+              <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                className="w-full text-sm px-3 py-2 rounded-lg"
+                style={{ border: '1px solid #E2E8F0', color: '#374151', backgroundColor: 'white' }}/>
+              {receiptFile && (
+                <p className="text-xs mt-1" style={{ color: '#64748B' }}>{receiptFile.name} selected</p>
+              )}
+            </div>
           </div>
+
           {form.gross_revenue > 0 && (
             <div className="mt-4 p-3.5 rounded-xl flex items-center gap-3" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -174,13 +250,14 @@ export default function TripsPage() {
               </p>
             </div>
           )}
+
           <div className="flex gap-2 mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
             <button onClick={save} disabled={saving || !form.vehicle_id || !form.guest_name || !form.start_date}
               className="px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 hover:opacity-90"
               style={{ backgroundColor: '#1D9E75' }}>
-              {saving ? 'Saving…' : 'Log trip'}
+              {saving ? (uploading ? 'Uploading receipt…' : 'Saving…') : 'Log trip'}
             </button>
-            <button onClick={() => setShowForm(false)}
+            <button onClick={() => { setShowForm(false); setReceiptFile(null) }}
               className="px-5 py-2 rounded-lg text-sm font-medium"
               style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
               Cancel
@@ -205,8 +282,8 @@ export default function TripsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
-                {['Guest', 'Vehicle', 'Dates', 'Net Revenue', 'Rating', 'Status'].map(h => (
-                  <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider ${h === 'Net Revenue' || h === 'Rating' ? 'text-right' : 'text-left'}`}
+                {['Guest', 'Vehicle', 'Dates', 'Net Revenue', 'Payout', 'Rating', 'Status'].map(h => (
+                  <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider ${['Net Revenue','Payout','Rating'].includes(h) ? 'text-right' : 'text-left'}`}
                     style={{ color: '#64748B', letterSpacing: '0.06em' }}>
                     {h}
                   </th>
@@ -218,11 +295,27 @@ export default function TripsPage() {
                 const days = t.start_date && t.end_date
                   ? Math.ceil((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / 86400000) : 0
                 const sc = STATUS_CFG[t.status] || STATUS_CFG.cancelled
+                const expectedNet = Number(t.net_revenue)
+                const paid = t.actual_payout != null ? Number(t.actual_payout) : null
+                const discrepancy = paid != null ? paid - expectedNet : null
                 return (
                   <tr key={t.id} className="data-table" style={{ borderBottom: '1px solid #F1F5F9' }}>
-                    <td className="px-4 py-3.5 font-semibold" style={{ color: '#0F172A' }}>{t.guest_name}</td>
+                    <td className="px-4 py-3.5 font-semibold" style={{ color: '#0F172A' }}>
+                      {t.guest_name}
+                      {t.receipt_url && (
+                        <a href={t.receipt_url} target="_blank" rel="noopener noreferrer"
+                          className="ml-2 text-xs font-normal underline" style={{ color: '#1D9E75' }}>
+                          Receipt
+                        </a>
+                      )}
+                    </td>
                     <td className="px-4 py-3.5" style={{ color: '#64748B' }}>
                       {(t.fleet as any)?.make} {(t.fleet as any)?.model}
+                      {t.start_mileage && t.end_mileage && (
+                        <div className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>
+                          {Number(t.start_mileage).toLocaleString()}→{Number(t.end_mileage).toLocaleString()} mi
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3.5" style={{ color: '#64748B' }}>
                       <span>{t.start_date}</span>
@@ -231,7 +324,21 @@ export default function TripsPage() {
                       <span className="ml-1.5 text-xs" style={{ color: '#94A3B8' }}>({days}d)</span>
                     </td>
                     <td className="px-4 py-3.5 text-right font-bold" style={{ color: '#1D9E75' }}>
-                      ${Number(t.net_revenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      ${expectedNet.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      {paid != null ? (
+                        <div>
+                          <span className="font-medium" style={{ color: '#0F172A' }}>${paid.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                          {discrepancy != null && Math.abs(discrepancy) > 5 && (
+                            <div className="text-xs mt-0.5" style={{ color: discrepancy < 0 ? '#DC2626' : '#16A34A' }}>
+                              {discrepancy > 0 ? '+' : ''}{discrepancy.toFixed(0)}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#E2E8F0' }}>—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-right">
                       {t.host_rating

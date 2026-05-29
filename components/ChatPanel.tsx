@@ -4,10 +4,13 @@ import type { ChatMessage } from '@/lib/types'
 
 const QUICK_PROMPTS = [
   'How should I price my car this weekend?',
-  'What maintenance is coming up?',
+  'Write a welcome message for my next guest',
+  'What maintenance is due and what will it cost?',
+  'Summarize my tax deductions this year',
   'How do I improve my listing ranking?',
-  'What can I deduct on taxes?',
-  'Should I enable instant book?',
+  'Which protection plan should I use?',
+  'Analyze my most profitable vehicle',
+  'Write a post-trip review request message',
 ]
 
 function formatMessage(text: string) {

@@ -24,6 +24,8 @@ export default function ExpensesPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [filter, setFilter] = useState('')
 
   useEffect(() => { load() }, [])
@@ -36,8 +38,26 @@ export default function ExpensesPage() {
 
   async function save() {
     setSaving(true)
-    await fetch('/api/expenses', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(form) })
-    setSaving(false); setShowForm(false); setForm(EMPTY); load()
+    let receipt_url: string | undefined
+
+    if (receiptFile) {
+      setUploading(true)
+      const fd = new FormData()
+      fd.append('file', receiptFile)
+      fd.append('bucket', 'expense-receipts')
+      fd.append('folder', form.date || new Date().toISOString().slice(0, 10))
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const result = await res.json()
+      if (result.url) receipt_url = result.url
+      setUploading(false)
+    }
+
+    await fetch('/api/expenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, ...(receipt_url ? { receipt_url } : {}) }),
+    })
+    setSaving(false); setShowForm(false); setForm(EMPTY); setReceiptFile(null); load()
   }
 
   async function remove(id: string) {
@@ -144,14 +164,24 @@ export default function ExpensesPage() {
                 onChange={e => setForm(p => ({...p, description: e.target.value}))}
                 className={inputCls} style={inputStyle}/>
             </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Receipt (photo or PDF)</label>
+              <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                className="w-full text-sm px-3 py-2 rounded-lg"
+                style={{ border: '1px solid #E2E8F0', color: '#374151', backgroundColor: 'white' }}/>
+              {receiptFile && (
+                <p className="text-xs mt-1" style={{ color: '#64748B' }}>{receiptFile.name} selected</p>
+              )}
+            </div>
           </div>
           <div className="flex gap-2 mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
             <button onClick={save} disabled={saving || !form.vehicle_id || !form.description || !form.amount}
               className="px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 hover:opacity-90"
               style={{ backgroundColor: '#1D9E75' }}>
-              {saving ? 'Saving…' : 'Add expense'}
+              {saving ? (uploading ? 'Uploading receipt…' : 'Saving…') : 'Add expense'}
             </button>
-            <button onClick={() => setShowForm(false)}
+            <button onClick={() => { setShowForm(false); setReceiptFile(null) }}
               className="px-5 py-2 rounded-lg text-sm font-medium"
               style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
               Cancel
@@ -197,6 +227,12 @@ export default function ExpensesPage() {
                     </td>
                     <td className="px-4 py-3.5 text-right font-bold" style={{ color: '#0F172A' }}>
                       ${Number(e.amount).toFixed(2)}
+                      {e.receipt_url && (
+                        <a href={e.receipt_url} target="_blank" rel="noopener noreferrer"
+                          className="ml-2 text-xs font-normal underline" style={{ color: '#1D9E75' }}>
+                          Receipt
+                        </a>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-right">
                       <button onClick={() => remove(e.id)}

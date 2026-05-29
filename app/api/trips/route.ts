@@ -13,11 +13,19 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
+
+  // Auto-calculate miles_added from odometer readings when both are provided
+  if (body.start_mileage != null && body.end_mileage != null) {
+    body.miles_added = Math.max(0, body.end_mileage - body.start_mileage)
+  }
+
   const { data, error } = await supabase.from('trips').insert(body).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Update vehicle mileage if miles_added provided
-  if (body.miles_added && body.vehicle_id) {
+  // Update vehicle mileage — use end_mileage directly for accuracy when available
+  if (body.end_mileage && body.vehicle_id) {
+    await supabase.from('fleet').update({ current_mileage: body.end_mileage }).eq('id', body.vehicle_id)
+  } else if (body.miles_added && body.vehicle_id) {
     const { data: vehicle } = await supabase.from('fleet').select('current_mileage').eq('id', body.vehicle_id).single()
     if (vehicle) {
       await supabase.from('fleet').update({

@@ -35,9 +35,27 @@ export interface Trip {
   guest_rating?: number
   host_rating?: number
   miles_added?: number
+  start_mileage?: number
+  end_mileage?: number
+  receipt_url?: string
+  actual_payout?: number
   notes?: string
   status: TripStatus
   fleet?: Vehicle
+}
+
+export type DocumentType = 'insurance' | 'registration' | 'title' | 'inspection' | 'other'
+
+export interface VehicleDocument {
+  id: string
+  created_at: string
+  vehicle_id: string
+  name: string
+  document_type: DocumentType
+  storage_path: string
+  public_url: string
+  expiry_date?: string
+  notes?: string
 }
 
 export interface Expense {
@@ -94,4 +112,6 @@ export interface FleetContext {
   ytdRevenue: number
   ytdExpenses: number
   totalTrips: number
+  expiringDocs?: Record<string, unknown>[]
+  payoutDiscrepancies?: Trip[]
 }
