@@ -1,6 +1,15 @@
 'use client'
 import { useEffect, useState } from 'react'
-import type { Vehicle } from '@/lib/types'
+import type { Vehicle, VehicleDocument, DocumentType } from '@/lib/types'
+
+const DOC_TYPES: DocumentType[] = ['insurance', 'registration', 'title', 'inspection', 'other']
+const DOC_CFG: Record<DocumentType, { bg: string; text: string }> = {
+  insurance:    { bg: '#FFF1F2', text: '#E11D48' },
+  registration: { bg: '#EFF6FF', text: '#2563EB' },
+  title:        { bg: '#F5F3FF', text: '#7C3AED' },
+  inspection:   { bg: '#FFFBEB', text: '#D97706' },
+  other:        { bg: '#F1F5F9', text: '#64748B' },
+}
 
 const EMPTY: Partial<Vehicle> = { make:'', model:'', year: new Date().getFullYear(), color:'', daily_rate:65, current_mileage:0, status:'active', notes:'' }
 
@@ -13,6 +22,8 @@ const STATUS_CFG: Record<string, { bg: string; text: string; label: string }> = 
   maintenance: { bg: '#FFFBEB', text: '#D97706', label: 'Maintenance' },
 }
 
+const DOC_EMPTY = { name: '', document_type: 'insurance' as DocumentType, expiry_date: '', notes: '' }
+
 export default function FleetPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [showForm, setShowForm] = useState(false)
@@ -20,12 +31,89 @@ export default function FleetPage() {
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
 
+  // Documents vault state
+  const [docs, setDocs] = useState<Record<string, VehicleDocument[]>>({})
+  const [expandedDocs, setExpandedDocs] = useState<string | null>(null)
+  const [showDocForm, setShowDocForm] = useState<string | null>(null)
+  const [docForm, setDocForm] = useState(DOC_EMPTY)
+  const [docFile, setDocFile] = useState<File | null>(null)
+  const [savingDoc, setSavingDoc] = useState(false)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+
   useEffect(() => { load() }, [])
 
   async function load() {
     const res = await fetch('/api/fleet')
     const data = await res.json()
     setVehicles(Array.isArray(data) ? data : [])
+  }
+
+  async function loadDocs(vehicleId: string) {
+    const res = await fetch(`/api/documents?vehicle_id=${vehicleId}`)
+    const data = await res.json()
+    setDocs(prev => ({ ...prev, [vehicleId]: Array.isArray(data) ? data : [] }))
+  }
+
+  function toggleDocs(vehicleId: string) {
+    if (expandedDocs === vehicleId) {
+      setExpandedDocs(null)
+      setShowDocForm(null)
+    } else {
+      setExpandedDocs(vehicleId)
+      setShowDocForm(null)
+      loadDocs(vehicleId)
+    }
+  }
+
+  async function saveDoc(vehicleId: string) {
+    if (!docFile) return
+    setSavingDoc(true)
+    setUploadingDoc(true)
+    const fd = new FormData()
+    fd.append('file', docFile)
+    fd.append('bucket', 'vehicle-docs')
+    fd.append('folder', vehicleId)
+    const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd })
+    const { url, path } = await uploadRes.json()
+    setUploadingDoc(false)
+
+    if (url) {
+      await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehicle_id: vehicleId,
+          name: docForm.name || docFile.name,
+          document_type: docForm.document_type,
+          storage_path: path,
+          public_url: url,
+          expiry_date: docForm.expiry_date || null,
+          notes: docForm.notes || null,
+        }),
+      })
+      setDocForm(DOC_EMPTY)
+      setDocFile(null)
+      setShowDocForm(null)
+      loadDocs(vehicleId)
+    }
+    setSavingDoc(false)
+  }
+
+  async function removeDoc(doc: VehicleDocument) {
+    if (!confirm('Remove this document?')) return
+    await fetch('/api/documents', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: doc.id, storage_path: doc.storage_path, bucket: 'vehicle-docs' }),
+    })
+    loadDocs(doc.vehicle_id)
+  }
+
+  function isExpiringSoon(date?: string) {
+    if (!date) return false
+    const expiry = new Date(date)
+    const thirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    return expiry <= thirtyDays
   }
 
   async function save() {
@@ -187,12 +275,103 @@ export default function FleetPage() {
                     style={{ border: '1px solid #E2E8F0', color: '#374151', backgroundColor: '#F8FAFC' }}>
                     Edit details
                   </button>
+                  <button onClick={() => toggleDocs(v.id)}
+                    className="flex-1 text-xs py-2 rounded-lg font-medium transition-colors"
+                    style={{ border: '1px solid #E2E8F0', color: expandedDocs === v.id ? '#1D9E75' : '#374151', backgroundColor: expandedDocs === v.id ? '#F0FDF4' : '#F8FAFC' }}>
+                    Documents
+                  </button>
                   <button onClick={() => remove(v.id)}
                     className="flex-1 text-xs py-2 rounded-lg font-medium transition-colors"
                     style={{ border: '1px solid #FEE2E2', color: '#DC2626', backgroundColor: '#FFF5F5' }}>
                     Remove
                   </button>
                 </div>
+
+                {/* Documents vault */}
+                {expandedDocs === v.id && (
+                  <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F1F5F9' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#64748B' }}>Documents</p>
+                      <button onClick={() => setShowDocForm(showDocForm === v.id ? null : v.id)}
+                        className="text-xs px-2.5 py-1 rounded-lg font-medium"
+                        style={{ backgroundColor: '#F0FDF4', color: '#1D9E75', border: '1px solid #BBF7D0' }}>
+                        + Upload
+                      </button>
+                    </div>
+
+                    {showDocForm === v.id && (
+                      <div className="mb-3 p-3 rounded-xl" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Name</label>
+                            <input type="text" placeholder="e.g. Insurance Card 2025"
+                              value={docForm.name} onChange={e => setDocForm(p => ({ ...p, name: e.target.value }))}
+                              className="w-full text-xs px-2.5 py-1.5 rounded-lg" style={{ border: '1px solid #E2E8F0', backgroundColor: 'white', color: '#0F172A' }}/>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Type</label>
+                            <select value={docForm.document_type} onChange={e => setDocForm(p => ({ ...p, document_type: e.target.value as DocumentType }))}
+                              className="w-full text-xs px-2.5 py-1.5 rounded-lg capitalize" style={{ border: '1px solid #E2E8F0', backgroundColor: 'white', color: '#0F172A' }}>
+                              {DOC_TYPES.map(t => <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Expiry date</label>
+                            <input type="date" value={docForm.expiry_date} onChange={e => setDocForm(p => ({ ...p, expiry_date: e.target.value }))}
+                              className="w-full text-xs px-2.5 py-1.5 rounded-lg" style={{ border: '1px solid #E2E8F0', backgroundColor: 'white', color: '#0F172A' }}/>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>File</label>
+                            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
+                              onChange={e => setDocFile(e.target.files?.[0] ?? null)}
+                              className="w-full text-xs" style={{ color: '#374151' }}/>
+                          </div>
+                        </div>
+                        <button onClick={() => saveDoc(v.id)} disabled={savingDoc || !docFile}
+                          className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-40"
+                          style={{ backgroundColor: '#1D9E75' }}>
+                          {savingDoc ? (uploadingDoc ? 'Uploading…' : 'Saving…') : 'Save document'}
+                        </button>
+                      </div>
+                    )}
+
+                    {(docs[v.id] || []).length === 0 ? (
+                      <p className="text-xs text-center py-3" style={{ color: '#94A3B8' }}>No documents uploaded yet</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {(docs[v.id] || []).map(d => {
+                          const cfg = DOC_CFG[d.document_type] || DOC_CFG.other
+                          const expiring = isExpiringSoon(d.expiry_date)
+                          return (
+                            <div key={d.id} className="flex items-center justify-between px-2.5 py-2 rounded-lg"
+                              style={{ backgroundColor: expiring ? '#FFFBEB' : '#F8FAFC', border: `1px solid ${expiring ? '#FDE68A' : '#E2E8F0'}` }}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-medium px-1.5 py-0.5 rounded capitalize flex-shrink-0"
+                                  style={{ backgroundColor: cfg.bg, color: cfg.text }}>
+                                  {d.document_type}
+                                </span>
+                                <a href={d.public_url} target="_blank" rel="noopener noreferrer"
+                                  className="text-xs font-medium truncate underline" style={{ color: '#0F172A' }}>
+                                  {d.name}
+                                </a>
+                                {d.expiry_date && (
+                                  <span className="text-xs flex-shrink-0" style={{ color: expiring ? '#D97706' : '#94A3B8' }}>
+                                    {expiring ? '⚠ ' : ''}exp {d.expiry_date}
+                                  </span>
+                                )}
+                              </div>
+                              <button onClick={() => removeDoc(d)} className="flex-shrink-0 ml-2 p-1 rounded hover:bg-red-50">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                </svg>
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}

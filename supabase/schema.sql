@@ -36,6 +36,10 @@ create table if not exists trips (
   guest_rating int check (guest_rating between 1 and 5),
   host_rating numeric(3,1) check (host_rating between 1 and 5),
   miles_added int default 0,
+  start_mileage int,
+  end_mileage int,
+  receipt_url text,
+  actual_payout numeric(10,2),
   notes text,
   status text not null default 'completed' check (status in ('upcoming','active','completed','cancelled'))
 );
@@ -83,6 +87,20 @@ create table if not exists maintenance (
   notes text
 );
 
+-- VEHICLE DOCUMENTS
+create table if not exists vehicle_documents (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  vehicle_id uuid references fleet(id) on delete cascade not null,
+  name text not null,
+  document_type text not null default 'other'
+    check (document_type in ('insurance','registration','title','inspection','other')),
+  storage_path text not null,
+  public_url text not null,
+  expiry_date date,
+  notes text
+);
+
 -- INDEXES
 create index if not exists trips_vehicle_id_idx on trips(vehicle_id);
 create index if not exists trips_start_date_idx on trips(start_date);
@@ -90,6 +108,15 @@ create index if not exists expenses_vehicle_id_idx on expenses(vehicle_id);
 create index if not exists expenses_date_idx on expenses(date);
 create index if not exists maintenance_vehicle_id_idx on maintenance(vehicle_id);
 create index if not exists maintenance_status_idx on maintenance(status);
+create index if not exists vehicle_docs_vehicle_id_idx on vehicle_documents(vehicle_id);
+
+-- SUPABASE STORAGE BUCKETS (run once)
+-- insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+-- values
+--   ('trip-receipts',    'trip-receipts',    true, 10485760, array['image/jpeg','image/png','image/webp','application/pdf']),
+--   ('expense-receipts', 'expense-receipts', true, 10485760, array['image/jpeg','image/png','image/webp','application/pdf']),
+--   ('vehicle-docs',     'vehicle-docs',     true, 20971520, array['image/jpeg','image/png','image/webp','application/pdf'])
+-- on conflict (id) do nothing;
 
 -- SEED: Default maintenance schedule types (run after adding a vehicle via app)
 -- These are inserted programmatically per vehicle when a new car is added.
