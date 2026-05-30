@@ -20,7 +20,7 @@ export default function MaintenancePage() {
   const [saving, setSaving] = useState(false)
   const [filter, setFilter] = useState<string>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState<Partial<MaintenanceItem & { cost: string }>>({})
+  const [editForm, setEditForm] = useState<Partial<Omit<MaintenanceItem, 'cost'> & { cost: string }>>({})
   const [editSaving, setEditSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
