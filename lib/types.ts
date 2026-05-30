@@ -138,13 +138,16 @@ export interface ConversationMessage {
   content: string
 }
 
+import type { ExpiringDocument, TripWithRelations, MaintenanceWithFleet } from './database.types'
+export type { ExpiringDocument, TripWithRelations, MaintenanceWithFleet }
+
 export interface FleetContext {
   vehicles: Vehicle[]
-  recentTrips: Trip[]
-  openMaintenance: MaintenanceItem[]
+  recentTrips: TripWithRelations[]
+  openMaintenance: MaintenanceWithFleet[]
   ytdRevenue: number
   ytdExpenses: number
   totalTrips: number
-  expiringDocs?: Record<string, unknown>[]
-  payoutDiscrepancies?: Trip[]
+  expiringDocs?: ExpiringDocument[]
+  payoutDiscrepancies?: TripWithRelations[]
 }

@@ -3,10 +3,10 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import type { ChatMessage, Conversation } from '@/lib/types'
 
 const QUICK_PROMPTS = [
-  'How should I price my car this weekend?',
-  'What maintenance is due and what will it cost?',
-  'Summarize my tax deductions this year',
-  'Analyze my most profitable vehicle',
+  'Which of my cars had the best ROI this year?',
+  'What maintenance is overdue and what should I budget?',
+  'What are my biggest tax deductions this year by category?',
+  'Are there any gaps in my booking calendar this month?',
 ]
 
 function formatMessage(text: string) {

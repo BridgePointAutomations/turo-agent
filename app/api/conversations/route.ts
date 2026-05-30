@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import type { ConversationWithCount } from '@/lib/database.types'
 
 export async function GET() {
   const { data, error } = await supabase
@@ -9,12 +10,12 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const formatted = (data ?? []).map(c => ({
+  const formatted = (data as ConversationWithCount[] ?? []).map(c => ({
     id: c.id,
     title: c.title,
     created_at: c.created_at,
     updated_at: c.updated_at,
-    message_count: (c.conversation_messages as any)?.[0]?.count ?? 0,
+    message_count: c.conversation_messages?.[0]?.count ?? 0,
   }))
 
   return NextResponse.json(formatted)

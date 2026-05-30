@@ -1,4 +1,7 @@
+import type { Metadata } from 'next'
 import Sidebar from '@/components/Sidebar'
+
+export const metadata: Metadata = { title: 'Calendar — TuroAgent' }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (

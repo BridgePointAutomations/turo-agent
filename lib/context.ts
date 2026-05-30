@@ -2,8 +2,8 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { supabase } from './supabase'
 import type { FleetContext } from './types'
+import type { TripWithRelations, MaintenanceWithFleet, ExpiringDocument } from './database.types'
 
-// Read once at module load time — server-side only (this file is only imported by API routes)
 let turoKnowledge = ''
 try {
   turoKnowledge = readFileSync(join(process.cwd(), 'TURO_KNOWLEDGE.md'), 'utf-8')
@@ -11,25 +11,34 @@ try {
   turoKnowledge = '(Turo knowledge base not loaded)'
 }
 
-// Static system prompt — role instructions + knowledge base. Never changes at runtime,
-// so it's sent as the cacheable block in the Anthropic prompt caching API.
-export const STATIC_ROLE_AND_KNOWLEDGE = `You are TuroAgent, an expert Turo car rental business advisor with full context of this host's operation.
+export const STATIC_ROLE_AND_KNOWLEDGE = `You are TuroAgent, an expert Turo car rental business advisor with full context of this host's fleet and financials.
 
 ## YOUR ROLE
-You are a proactive, knowledgeable Turo business advisor. You:
-- Always reference the host's actual vehicles, rates, and data provided when giving advice
-- Give specific, actionable recommendations — not generic tips
-- Flag maintenance issues, document expiry, or profitability concerns proactively
-- Know Turo platform mechanics deeply: dynamic pricing, All-Star Host program, protection plans, fee structures, listing SEO, guest management, damage claims, tax deductions
-- Suggest ready-to-send message templates for guests when relevant
-- Think like a small business operator focused on ROI and host protection
+You are a proactive, sharp Turo business advisor. You:
+- Always cite the host's actual numbers (rates, revenue, mileage, guest names) — never speak in generalities when data is available
+- Give specific, actionable recommendations with a clear next step
+- Proactively flag maintenance due, expiring documents, payout discrepancies, or profitability risks even if not asked
+- Know Turo platform mechanics deeply: dynamic pricing, All-Star Host requirements, protection plans, fee structures, listing SEO, guest management, damage claims, tax deductions (Schedule C, depreciation, mileage)
+- Offer ready-to-send guest message templates when messaging is relevant
+- Think like a small business operator optimizing for net profit and host protection
 
-Keep responses concise and practical. Use bullet points for lists. When relevant, cite specific dollar amounts or percentages from the host's own data.
+## OUTPUT FORMAT
+- Lead with the key insight or direct answer — no preamble, no "Great question!"
+- Simple factual lookups: one sentence or a brief list
+- Financial analysis or comparisons: use a markdown table with dollar amounts
+- Action plans: numbered list with specific steps
+- Always include dollar amounts or percentages from the host's own data when relevant
+- Maximum 3 paragraphs for any response unless a list or table is more appropriate
+
+## REASONING APPROACH
+For questions involving multi-vehicle comparisons, ROI calculations, tax strategy, or pricing optimization:
+- First identify what data you have vs. what you need to fetch via tools
+- Calculate step by step using the host's actual figures before presenting the answer
+- If the context data is insufficient to answer accurately, use the appropriate tool rather than estimating
 
 ## TURO PLATFORM KNOWLEDGE BASE
 ${turoKnowledge}`
 
-// In-memory context cache — 60s TTL prevents redundant DB queries on rapid follow-up messages
 let cachedCtx: { data: FleetContext; ts: number } | null = null
 const CACHE_TTL_MS = 60_000
 
@@ -38,37 +47,54 @@ async function fetchFleetContext(): Promise<FleetContext> {
   const yearStart = `${now.getFullYear()}-01-01`
   const thirtyDaysOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
-  const [vehiclesRes, recentTripsRes, ytdTripsRes, maintenanceRes, expensesRes, expiringDocsRes] = await Promise.all([
+  const currentYear = now.getFullYear()
+
+  const [vehiclesRes, recentTripsRes, ytdSummaryRes, maintenanceRes, ytdExpenseSummaryRes, expiringDocsRes] = await Promise.all([
     supabase.from('fleet').select('*').order('created_at'),
-    // Recent trips for display (last 10)
-    supabase.from('trips').select('*, fleet(make,model,year), guests(name,flag)').order('start_date', { ascending: false }).limit(10),
-    // YTD trips — no limit, correct revenue sum regardless of trip count
-    supabase.from('trips').select('net_revenue').gte('start_date', yearStart),
-    supabase.from('maintenance').select('*, fleet(make,model,year)').in('status', ['due_soon', 'overdue']),
-    supabase.from('expenses').select('amount').gte('date', yearStart),
-    supabase.from('vehicle_documents').select('name, document_type, expiry_date, fleet(make,model,year)')
-      .not('expiry_date', 'is', null).lte('expiry_date', thirtyDaysOut),
+    supabase
+      .from('trips')
+      .select('*, fleet(make,model,year), guests(name,flag)')
+      .order('start_date', { ascending: false })
+      .limit(10),
+    // DB-level aggregate via view — no JS reduce needed
+    supabase
+      .from('ytd_summary')
+      .select('total_net_revenue')
+      .eq('year', currentYear)
+      .single(),
+    supabase
+      .from('maintenance')
+      .select('*, fleet(make,model,year)')
+      .in('status', ['due_soon', 'overdue']),
+    // DB-level aggregate via view
+    supabase
+      .from('ytd_expenses_summary')
+      .select('total_expenses')
+      .eq('year', currentYear)
+      .single(),
+    supabase
+      .from('vehicle_documents')
+      .select('name, document_type, expiry_date, fleet(make,model,year)')
+      .not('expiry_date', 'is', null)
+      .lte('expiry_date', thirtyDaysOut),
   ])
 
-  const ytdRevenue = (ytdTripsRes.data || [])
-    .reduce((sum, t) => sum + (t.net_revenue || 0), 0)
+  const ytdRevenue = (ytdSummaryRes.data?.total_net_revenue as number) ?? 0
+  const ytdExpenses = (ytdExpenseSummaryRes.data?.total_expenses as number) ?? 0
 
-  const ytdExpenses = (expensesRes.data || [])
-    .reduce((sum, e) => sum + (e.amount || 0), 0)
-
-  const recentTrips = recentTripsRes.data || []
-  const discrepancies = recentTrips.filter(t =>
-    t.actual_payout != null && Math.abs(t.actual_payout - t.net_revenue) > 5
+  const recentTrips = (recentTripsRes.data ?? []) as TripWithRelations[]
+  const discrepancies = recentTrips.filter(
+    t => t.actual_payout != null && Math.abs(t.actual_payout - t.net_revenue) > 5
   )
 
   return {
-    vehicles: vehiclesRes.data || [],
+    vehicles: vehiclesRes.data ?? [],
     recentTrips,
-    openMaintenance: maintenanceRes.data || [],
+    openMaintenance: (maintenanceRes.data ?? []) as MaintenanceWithFleet[],
     ytdRevenue,
     ytdExpenses,
     totalTrips: recentTrips.length,
-    expiringDocs: expiringDocsRes.data || [],
+    expiringDocs: (expiringDocsRes.data ?? []) as unknown as ExpiringDocument[],
     payoutDiscrepancies: discrepancies,
   }
 }
@@ -80,63 +106,70 @@ export async function buildFleetContext(): Promise<FleetContext> {
   return data
 }
 
-// Returns the dynamic fleet section only (changes every request — not cached)
 export function buildDynamicFleetSection(ctx: FleetContext): string {
   const vehicleList = ctx.vehicles.length
-    ? ctx.vehicles.map(v =>
-      `  - ${v.year} ${v.make} ${v.model} | $${v.daily_rate}/day | ${v.current_mileage.toLocaleString()} mi | Status: ${v.status}${v.notes ? ` | Notes: ${v.notes}` : ''}`
-    ).join('\n')
+    ? ctx.vehicles.map(v => {
+        const roiFields = v.purchase_price
+          ? ` | Purchase: $${Number(v.purchase_price).toLocaleString()}${v.financing_monthly ? ` | Loan: $${v.financing_monthly}/mo` : ''}`
+          : ''
+        return `  [${v.id}] ${v.year} ${v.make} ${v.model} | Rate: $${v.daily_rate}/day | Mileage: ${v.current_mileage.toLocaleString()} mi | Status: ${v.status}${roiFields}${v.notes ? ` | Notes: ${v.notes}` : ''}`
+      }).join('\n')
     : '  (No vehicles added yet)'
 
   const recentTripList = ctx.recentTrips.slice(0, 5).length
     ? ctx.recentTrips.slice(0, 5).map(t => {
-        const flag = (t.guests as any)?.flag
-        const flagNote = flag && flag !== 'none' ? ` [${flag.toUpperCase()}]` : ''
+        const trip = t as TripWithRelations
+        const flag = trip.guests?.flag
+        const flagNote = flag && flag !== 'none' ? ` | Flag: ${flag.toUpperCase()}` : ''
         const mileageInfo = t.start_mileage && t.end_mileage
-          ? ` | Odometer: ${t.start_mileage.toLocaleString()}→${t.end_mileage.toLocaleString()} mi`
-          : t.miles_added ? ` | +${t.miles_added} mi` : ''
+          ? ` | Miles: ${t.start_mileage.toLocaleString()}→${t.end_mileage.toLocaleString()}`
+          : t.miles_added ? ` | Miles added: ${t.miles_added}` : ''
         const payoutInfo = t.actual_payout != null
-          ? ` | Paid: $${Number(t.actual_payout).toFixed(0)}${Math.abs(t.actual_payout - t.net_revenue) > 5 ? ' ⚠ discrepancy' : ''}`
+          ? ` | Paid: $${Number(t.actual_payout).toFixed(0)}${Math.abs(t.actual_payout - t.net_revenue) > 5 ? ' ⚠' : ''}`
           : ''
-        return `  - ${t.start_date} → ${t.end_date} | Guest: ${t.guest_name}${flagNote} | Net: $${Number(t.net_revenue).toFixed(0)}${payoutInfo} | Rating: ${t.host_rating ?? 'pending'}★${mileageInfo}`
+        return `  ${t.start_date}→${t.end_date} | Guest: ${t.guest_name}${flagNote} | Net: $${Number(t.net_revenue).toFixed(0)}${payoutInfo} | Host rating: ${t.host_rating ?? 'pending'}★${mileageInfo}`
       }).join('\n')
     : '  (No trips logged yet)'
 
   const maintenanceAlerts = ctx.openMaintenance.length
-    ? ctx.openMaintenance.map(m =>
-      `  - ${(m.fleet as any)?.make} ${(m.fleet as any)?.model}: ${m.service_type} is ${m.status.replace('_', ' ')}${m.next_due_mileage ? ` (due at ${m.next_due_mileage.toLocaleString()} mi)` : ''}`
-    ).join('\n')
+    ? ctx.openMaintenance.map(m => {
+        const maint = m as MaintenanceWithFleet
+        const vehicle = maint.fleet ? `${maint.fleet.make} ${maint.fleet.model}` : 'Unknown vehicle'
+        const dueAt = maint.next_due_mileage ? ` | Due at: ${maint.next_due_mileage.toLocaleString()} mi` : ''
+        const dueDate = maint.next_due_date ? ` | Due date: ${maint.next_due_date}` : ''
+        return `  ${vehicle} | Service: ${maint.service_type} | Status: ${maint.status.replace('_', ' ')}${dueAt}${dueDate}`
+      }).join('\n')
     : '  (No maintenance alerts)'
 
   const docAlerts = ctx.expiringDocs?.length
-    ? ctx.expiringDocs.map((d: any) =>
-      `  - ${(d.fleet as any)?.make} ${(d.fleet as any)?.model}: ${d.name} (${d.document_type}) expires ${d.expiry_date}`
-    ).join('\n')
+    ? ctx.expiringDocs.map(d => {
+        const stub = Array.isArray(d.fleet) ? d.fleet[0] : d.fleet
+        const vehicle = stub ? `${stub.make} ${stub.model}` : 'Unknown vehicle'
+        return `  ${vehicle} | Document: ${d.name} | Type: ${d.document_type} | Expires: ${d.expiry_date}`
+      }).join('\n')
     : null
 
   const payoutWarnings = ctx.payoutDiscrepancies?.length
-    ? `\n⚠ PAYOUT DISCREPANCIES: ${ctx.payoutDiscrepancies.length} recent trip(s) where actual payout differed from expected net revenue by more than $5. Review with host.`
+    ? `\n⚠ PAYOUT DISCREPANCIES (${ctx.payoutDiscrepancies.length} trips): actual payout differs from expected net revenue by >$5. Investigate before answering payout questions.`
     : ''
 
   const netYTD = ctx.ytdRevenue - ctx.ytdExpenses
+  const margin = ctx.ytdRevenue > 0 ? ((netYTD / ctx.ytdRevenue) * 100).toFixed(1) : '0.0'
 
-  return `## HOST'S FLEET
+  return `## HOST FLEET (${ctx.vehicles.length} vehicle${ctx.vehicles.length !== 1 ? 's' : ''})
 ${vehicleList}
 
-## RECENT TRIPS (last 5)
+## RECENT TRIPS (last 5 of ${ctx.totalTrips} shown)
 ${recentTripList}
 
-## MAINTENANCE ALERTS
+## MAINTENANCE ALERTS (${ctx.openMaintenance.length} open)
 ${maintenanceAlerts}
-${docAlerts ? `\n## DOCUMENT EXPIRY ALERTS\n${docAlerts}` : ''}
+${docAlerts ? `\n## DOCUMENT EXPIRY ALERTS (next 30 days)\n${docAlerts}` : ''}
 
-## FINANCIALS (YTD ${new Date().getFullYear()})
-  - Gross revenue: $${ctx.ytdRevenue.toFixed(0)}
-  - Expenses: $${ctx.ytdExpenses.toFixed(0)}
-  - Net profit: $${netYTD.toFixed(0)}${payoutWarnings}`
+## YTD FINANCIALS (${new Date().getFullYear()})
+  Net revenue: $${ctx.ytdRevenue.toFixed(0)} | Expenses: $${ctx.ytdExpenses.toFixed(0)} | Net profit: $${netYTD.toFixed(0)} | Margin: ${margin}%${payoutWarnings}`
 }
 
-// Combined prompt for callers that don't use prompt caching (e.g. tests)
 export function buildSystemPrompt(ctx: FleetContext): string {
   return `${STATIC_ROLE_AND_KNOWLEDGE}\n\n${buildDynamicFleetSection(ctx)}`
 }
