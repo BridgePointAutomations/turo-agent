@@ -174,39 +174,47 @@ export default function TripsPage() {
 
   async function save() {
     setSaving(true)
-    let receipt_url: string | undefined
+    try {
+      let receipt_url: string | undefined
 
-    if (receiptFile) {
-      setUploading(true)
-      const fd = new FormData()
-      fd.append('file', receiptFile)
-      fd.append('bucket', 'trip-receipts')
-      fd.append('folder', `trip-${Date.now()}`)
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      const result = await res.json()
-      if (result.url) receipt_url = result.url
-      setUploading(false)
+      if (receiptFile) {
+        setUploading(true)
+        const fd = new FormData()
+        fd.append('file', receiptFile)
+        fd.append('bucket', 'trip-receipts')
+        fd.append('folder', `trip-${Date.now()}`)
+        const res = await fetch('/api/upload', { method: 'POST', body: fd })
+        const result = await res.json()
+        if (result.url) receipt_url = result.url
+        setUploading(false)
+      }
+
+      const payload: Record<string, unknown> = { ...form }
+      if (form.start_mileage !== '') payload.start_mileage = Number(form.start_mileage)
+      else delete payload.start_mileage
+      if (form.end_mileage !== '') payload.end_mileage = Number(form.end_mileage)
+      else delete payload.end_mileage
+      if (form.actual_payout !== '') payload.actual_payout = Number(form.actual_payout)
+      else delete payload.actual_payout
+      if (receipt_url) payload.receipt_url = receipt_url
+      if (lineItems.length > 0) payload.line_items = lineItems
+
+      const res = await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(`Failed to save trip: ${err.error ?? res.statusText}`)
+        return
+      }
+      setShowForm(false)
+      setForm(EMPTY_FORM)
+      setGuestSearch('')
+      setLineItems([])
+      setShowLineItems(false)
+      setReceiptFile(null)
+      load()
+    } finally {
+      setSaving(false)
     }
-
-    const payload: Record<string, unknown> = { ...form }
-    if (form.start_mileage !== '') payload.start_mileage = Number(form.start_mileage)
-    else delete payload.start_mileage
-    if (form.end_mileage !== '') payload.end_mileage = Number(form.end_mileage)
-    else delete payload.end_mileage
-    if (form.actual_payout !== '') payload.actual_payout = Number(form.actual_payout)
-    else delete payload.actual_payout
-    if (receipt_url) payload.receipt_url = receipt_url
-    if (lineItems.length > 0) payload.line_items = lineItems
-
-    await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-    setSaving(false)
-    setShowForm(false)
-    setForm(EMPTY_FORM)
-    setGuestSearch('')
-    setLineItems([])
-    setShowLineItems(false)
-    setReceiptFile(null)
-    load()
   }
 
   const filtered = filter ? trips.filter(t => t.vehicle_id === filter) : trips
@@ -519,12 +527,12 @@ export default function TripsPage() {
           )}
 
           <div className="flex gap-2 mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
-            <button onClick={save} disabled={saving || !form.vehicle_id || !form.guest_name || !form.start_date}
+            <button onClick={save} disabled={saving || !form.vehicle_id || !form.guest_name || !form.start_date || !form.end_date}
               className="px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 hover:opacity-90"
               style={{ backgroundColor: '#1D9E75' }}>
               {saving ? (uploading ? 'Uploading receipt…' : 'Saving…') : 'Log trip'}
             </button>
-            <button onClick={() => { setShowForm(false); setLineItems([]); setGuestSearch(''); setShowLineItems(false); setReceiptFile(null) }}
+            <button onClick={() => { setShowForm(false); setLineItems([]); setGuestSearch(''); setShowLineItems(false); setReceiptFile(null); setSaving(false) }}
               className="px-5 py-2 rounded-lg text-sm font-medium"
               style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
               Cancel

@@ -50,14 +50,6 @@ export async function POST(req: NextRequest) {
     tripData.miles_added = Math.max(0, tripData.end_mileage - tripData.start_mileage)
   }
 
-  // Compute gross_revenue from base + line items if line items provided
-  if (line_items && line_items.length > 0) {
-    const adjustments = line_items.reduce((sum: number, item: { type: string; amount: number }) => {
-      return item.type === 'discount' ? sum - item.amount : sum + item.amount
-    }, 0)
-    tripData.gross_revenue = (tripData.gross_revenue || 0) + adjustments
-  }
-
   const { data, error } = await supabase.from('trips').insert(tripData).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
