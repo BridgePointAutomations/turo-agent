@@ -84,13 +84,34 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, ...updates } = await req.json()
+  const { id, line_items, ...updates } = await req.json()
   const { data, error } = await supabase.from('trips').update(updates).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Sync guest stats if guest_id is set on the updated trip
+  // Replace line items when provided (delete all, re-insert)
+  if (line_items !== undefined) {
+    await supabase.from('trip_line_items').delete().eq('trip_id', id)
+    if (line_items.length > 0) {
+      await supabase.from('trip_line_items').insert(
+        line_items.map((item: { label: string; amount: number; type: string }) => ({
+          trip_id: id,
+          label: item.label,
+          amount: item.amount,
+          type: item.type,
+        }))
+      )
+    }
+  }
+
   const guestId = updates.guest_id ?? data?.guest_id
   if (guestId) await syncGuestStats(guestId)
 
   return NextResponse.json(data)
+}
+
+export async function DELETE(req: NextRequest) {
+  const { id } = await req.json()
+  const { error } = await supabase.from('trips').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
 }

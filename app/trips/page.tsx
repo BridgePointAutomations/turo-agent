@@ -65,6 +65,8 @@ export default function TripsPage() {
   const [guests, setGuests] = useState<Guest[]>([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -159,6 +161,51 @@ export default function TripsPage() {
     setShowGuestDropdown(false)
   }
 
+  function startEdit(t: Trip) {
+    setForm({
+      vehicle_id: t.vehicle_id ?? '',
+      guest_name: t.guest_name,
+      guest_id: t.guest_id ?? '',
+      start_date: t.start_date,
+      end_date: t.end_date,
+      daily_rate: Number(t.daily_rate),
+      gross_revenue: Number(t.gross_revenue),
+      turo_fee_pct: Number(t.turo_fee_pct),
+      guest_rating: t.guest_rating ?? 5,
+      host_rating: Number(t.host_rating ?? 5),
+      miles_added: t.miles_added ?? 0,
+      start_mileage: t.start_mileage ?? '',
+      end_mileage: t.end_mileage ?? '',
+      actual_payout: t.actual_payout ?? '',
+      notes: t.notes ?? '',
+      status: t.status as typeof EMPTY_FORM['status'],
+    })
+    const existing = ((t as any).trip_line_items ?? []) as Array<{ label: string; amount: number; type: TripLineItem['type'] }>
+    setLineItems(existing.map(i => ({ label: i.label, amount: Number(i.amount), type: i.type })))
+    setGuestSearch(t.guest_name)
+    setEditing(t.id)
+    setShowForm(true)
+    setShowLineItems(existing.length > 0)
+    setConfirmDelete(null)
+  }
+
+  async function remove(id: string) {
+    const res = await fetch('/api/trips', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(`Failed to delete trip: ${err.error ?? res.statusText}`)
+      return
+    }
+    setShowForm(false)
+    setEditing(null)
+    setConfirmDelete(null)
+    setForm(EMPTY_FORM)
+    setGuestSearch('')
+    setLineItems([])
+    setShowLineItems(false)
+    load()
+  }
+
   async function createAndSelectGuest(name: string) {
     const res = await fetch('/api/guests', {
       method: 'POST',
@@ -199,15 +246,20 @@ export default function TripsPage() {
       if (!(form.guest_rating >= 1 && form.guest_rating <= 5)) delete payload.guest_rating
       if (!(form.host_rating >= 1 && form.host_rating <= 5)) delete payload.host_rating
       if (receipt_url) payload.receipt_url = receipt_url
-      if (lineItems.length > 0) payload.line_items = lineItems
+      payload.line_items = lineItems
 
-      const res = await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const method = editing ? 'PATCH' : 'POST'
+      if (editing) payload.id = editing
+
+      const res = await fetch('/api/trips', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         alert(`Failed to save trip: ${err.error ?? res.statusText}`)
         return
       }
       setShowForm(false)
+      setEditing(null)
+      setConfirmDelete(null)
       setForm(EMPTY_FORM)
       setGuestSearch('')
       setLineItems([])
@@ -246,7 +298,7 @@ export default function TripsPage() {
               {vehicles.map(v => <option key={v.id} value={v.id}>{v.year} {v.make} {v.model}</option>)}
             </select>
           )}
-          <button onClick={() => setShowForm(true)}
+          <button onClick={() => { setForm(EMPTY_FORM); setEditing(null); setConfirmDelete(null); setGuestSearch(''); setLineItems([]); setShowLineItems(false); setShowForm(true) }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90"
             style={{ backgroundColor: '#1D9E75', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -260,8 +312,8 @@ export default function TripsPage() {
       {/* Form */}
       {showForm && (
         <div className="bg-white rounded-xl p-6 mb-6" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          <h2 className="text-base font-semibold mb-1" style={{ color: '#0F172A' }}>Log a trip</h2>
-          <p className="text-sm mb-5" style={{ color: '#64748B' }}>Record your trip details and revenue</p>
+          <h2 className="text-base font-semibold mb-1" style={{ color: '#0F172A' }}>{editing ? 'Edit trip' : 'Log a trip'}</h2>
+          <p className="text-sm mb-5" style={{ color: '#64748B' }}>{editing ? 'Update trip details and revenue' : 'Record your trip details and revenue'}</p>
 
           {/* Blocked guest warning */}
           {selectedGuest?.flag === 'blocked' && (
@@ -528,17 +580,38 @@ export default function TripsPage() {
             </div>
           )}
 
-          <div className="flex gap-2 mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
+          <div className="flex items-center gap-2 mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
             <button onClick={save} disabled={saving || !form.vehicle_id || !form.guest_name || !form.start_date || !form.end_date}
               className="px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 hover:opacity-90"
               style={{ backgroundColor: '#1D9E75' }}>
-              {saving ? (uploading ? 'Uploading receipt…' : 'Saving…') : 'Log trip'}
+              {saving ? (uploading ? 'Uploading receipt…' : 'Saving…') : editing ? 'Save changes' : 'Log trip'}
             </button>
-            <button onClick={() => { setShowForm(false); setLineItems([]); setGuestSearch(''); setShowLineItems(false); setReceiptFile(null); setSaving(false) }}
+            <button onClick={() => { setShowForm(false); setEditing(null); setConfirmDelete(null); setLineItems([]); setGuestSearch(''); setShowLineItems(false); setReceiptFile(null); setSaving(false) }}
               className="px-5 py-2 rounded-lg text-sm font-medium"
               style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
               Cancel
             </button>
+            {editing && (
+              <div className="ml-auto">
+                {confirmDelete === editing ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm" style={{ color: '#64748B' }}>Delete this trip?</span>
+                    <button onClick={() => remove(editing)}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium text-white"
+                      style={{ backgroundColor: '#E11D48' }}>Delete</button>
+                    <button onClick={() => setConfirmDelete(null)}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium"
+                      style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDelete(editing)}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium"
+                    style={{ border: '1px solid #FECDD3', color: '#E11D48', backgroundColor: 'white' }}>
+                    Delete trip
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -641,8 +714,15 @@ export default function TripsPage() {
                         : <span style={{ color: '#E2E8F0' }}>—</span>}
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex justify-center">
+                      <div className="flex items-center justify-between gap-2">
                         <span className="badge" style={{ backgroundColor: sc.bg, color: sc.text }}>{t.status}</span>
+                        <button onClick={() => startEdit(t)} title="Edit trip"
+                          className="hover:opacity-70 flex-shrink-0" style={{ color: '#94A3B8' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        </button>
                       </div>
                     </td>
                   </tr>
