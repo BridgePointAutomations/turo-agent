@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import type { Vehicle, VehicleDocument, DocumentType } from '@/lib/types'
+import type { Vehicle, VehicleDocument, DocumentType, Trip } from '@/lib/types'
 
 const DOC_TYPES: DocumentType[] = ['insurance', 'registration', 'title', 'inspection', 'other']
 const DOC_CFG: Record<DocumentType, { bg: string; text: string }> = {
@@ -35,6 +35,9 @@ export default function FleetPage() {
   const [docs, setDocs] = useState<Record<string, VehicleDocument[]>>({})
   const [expandedDocs, setExpandedDocs] = useState<string | null>(null)
   const [showDocForm, setShowDocForm] = useState<string | null>(null)
+  // ROI panel state
+  const [expandedRoi, setExpandedRoi] = useState<string | null>(null)
+  const [vehicleTrips, setVehicleTrips] = useState<Record<string, Trip[]>>({})
   const [docForm, setDocForm] = useState(DOC_EMPTY)
   const [docFile, setDocFile] = useState<File | null>(null)
   const [savingDoc, setSavingDoc] = useState(false)
@@ -136,6 +139,43 @@ export default function FleetPage() {
 
   function startEdit(v: Vehicle) { setForm(v); setEditing(v.id); setShowForm(true) }
 
+  async function toggleRoi(vehicleId: string) {
+    if (expandedRoi === vehicleId) { setExpandedRoi(null); return }
+    setExpandedRoi(vehicleId)
+    if (!vehicleTrips[vehicleId]) {
+      const data = await fetch(`/api/trips?vehicle_id=${vehicleId}`).then(r => r.json())
+      setVehicleTrips(prev => ({ ...prev, [vehicleId]: Array.isArray(data) ? data : [] }))
+    }
+  }
+
+  function calcRoi(v: Vehicle, trips: Trip[]) {
+    const now = new Date()
+    const purchaseDate = v.purchase_date ? new Date(v.purchase_date) : null
+    const monthsOwned = purchaseDate
+      ? Math.max(1, (now.getFullYear() - purchaseDate.getFullYear()) * 12 + now.getMonth() - purchaseDate.getMonth())
+      : null
+    const yearsOwned = monthsOwned != null ? monthsOwned / 12 : null
+
+    const financeTotal = (v.financing_monthly ?? 0) * (v.financing_months ?? 0)
+    const depreciationTotal = yearsOwned != null ? (v.depreciation_annual ?? 0) * yearsOwned : 0
+    const totalInvested = (v.purchase_price ?? 0) + financeTotal + depreciationTotal
+
+    const totalEarned = trips.reduce((s, t) => s + Number(t.net_revenue || 0), 0)
+    const netPosition = totalEarned - totalInvested
+    const recoveredPct = totalInvested > 0 ? Math.min(100, (totalEarned / totalInvested) * 100) : 0
+
+    const avgMonthlyNet = monthsOwned && monthsOwned > 0 ? totalEarned / monthsOwned : null
+    const remaining = totalInvested - totalEarned
+    const monthsToPayoff = avgMonthlyNet && avgMonthlyNet > 0 && remaining > 0
+      ? Math.ceil(remaining / avgMonthlyNet) : null
+    const payoffDate = monthsToPayoff != null
+      ? new Date(now.getFullYear(), now.getMonth() + monthsToPayoff, 1)
+        .toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      : totalEarned >= totalInvested ? 'Paid off' : null
+
+    return { totalInvested, totalEarned, netPosition, recoveredPct, payoffDate, monthsToPayoff }
+  }
+
   const fields = [
     { label: 'Make', key: 'make', type: 'text', placeholder: 'Toyota' },
     { label: 'Model', key: 'model', type: 'text', placeholder: 'Camry' },
@@ -206,6 +246,46 @@ export default function FleetPage() {
               />
             </div>
           </div>
+
+          {/* ROI Tracking section */}
+          <div className="mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: '#64748B' }}>
+              ROI Tracking <span className="normal-case font-normal ml-1" style={{ color: '#94A3B8' }}>(optional)</span>
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Purchase price ($)</label>
+                <input type="number" placeholder="e.g. 25000" value={(form as any).purchase_price || ''}
+                  onChange={e => setForm(prev => ({ ...prev, purchase_price: e.target.value ? Number(e.target.value) : undefined }))}
+                  className={inputCls} style={inputStyle}/>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Purchase date</label>
+                <input type="date" value={(form as any).purchase_date || ''}
+                  onChange={e => setForm(prev => ({ ...prev, purchase_date: e.target.value || undefined }))}
+                  className={inputCls} style={inputStyle}/>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Monthly financing payment ($)</label>
+                <input type="number" placeholder="e.g. 350" value={(form as any).financing_monthly || ''}
+                  onChange={e => setForm(prev => ({ ...prev, financing_monthly: e.target.value ? Number(e.target.value) : undefined }))}
+                  className={inputCls} style={inputStyle}/>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Financing term (months)</label>
+                <input type="number" placeholder="e.g. 60" value={(form as any).financing_months || ''}
+                  onChange={e => setForm(prev => ({ ...prev, financing_months: e.target.value ? Number(e.target.value) : undefined }))}
+                  className={inputCls} style={inputStyle}/>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Annual depreciation ($)</label>
+                <input type="number" placeholder="e.g. 2000" value={(form as any).depreciation_annual || ''}
+                  onChange={e => setForm(prev => ({ ...prev, depreciation_annual: e.target.value ? Number(e.target.value) : undefined }))}
+                  className={inputCls} style={inputStyle}/>
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
             <button onClick={save} disabled={saving || !form.make || !form.model}
               className="px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 transition-all hover:opacity-90"
@@ -306,6 +386,11 @@ export default function FleetPage() {
                     className="flex-1 text-xs py-2 rounded-lg font-medium transition-colors"
                     style={{ border: '1px solid #E2E8F0', color: expandedDocs === v.id ? '#1D9E75' : '#374151', backgroundColor: expandedDocs === v.id ? '#F0FDF4' : '#F8FAFC' }}>
                     Documents
+                  </button>
+                  <button onClick={() => toggleRoi(v.id)}
+                    className="flex-1 text-xs py-2 rounded-lg font-medium transition-colors"
+                    style={{ border: '1px solid #E2E8F0', color: expandedRoi === v.id ? '#7C3AED' : '#374151', backgroundColor: expandedRoi === v.id ? '#F5F3FF' : '#F8FAFC' }}>
+                    ROI
                   </button>
                 </div>
 
@@ -415,6 +500,62 @@ export default function FleetPage() {
                     )}
                   </div>
                 )}
+
+                {/* ROI panel */}
+                {expandedRoi === v.id && (() => {
+                  const trips = vehicleTrips[v.id]
+                  if (!trips) return (
+                    <div className="mt-3 pt-3 text-xs text-center py-2" style={{ borderTop: '1px solid #F1F5F9', color: '#94A3B8' }}>
+                      Loading…
+                    </div>
+                  )
+                  const hasPurchasePrice = v.purchase_price != null && v.purchase_price > 0
+                  const roi = hasPurchasePrice ? calcRoi(v, trips) : null
+                  return (
+                    <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F1F5F9' }}>
+                      <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: '#7C3AED' }}>ROI Tracker</p>
+                      {!hasPurchasePrice ? (
+                        <div className="flex items-center justify-between px-3 py-3 rounded-lg"
+                          style={{ backgroundColor: '#F5F3FF', border: '1px solid #DDD6FE' }}>
+                          <p className="text-xs" style={{ color: '#6D28D9' }}>
+                            Set a purchase price in Edit details to track ROI.
+                          </p>
+                          <button onClick={() => startEdit(v)}
+                            className="text-xs px-3 py-1.5 rounded-lg font-medium ml-3 flex-shrink-0"
+                            style={{ backgroundColor: '#7C3AED', color: 'white' }}>
+                            Set up
+                          </button>
+                        </div>
+                      ) : roi && (
+                        <div>
+                          <div className="mb-3">
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span style={{ color: '#6D28D9' }}>Investment recovered</span>
+                              <span className="font-bold" style={{ color: '#7C3AED' }}>{roi.recoveredPct.toFixed(0)}%</span>
+                            </div>
+                            <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#EDE9FE' }}>
+                              <div className="h-full rounded-full transition-all duration-500"
+                                style={{ width: `${roi.recoveredPct}%`, backgroundColor: roi.recoveredPct >= 100 ? '#16A34A' : '#7C3AED' }}/>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {[
+                              { label: 'Total invested', value: `$${Math.round(roi.totalInvested).toLocaleString()}`, color: '#374151', bg: '#F8FAFC' },
+                              { label: 'Total earned', value: `$${Math.round(roi.totalEarned).toLocaleString()}`, color: '#1D9E75', bg: '#F0FDF4' },
+                              { label: 'Net position', value: `${roi.netPosition >= 0 ? '+' : ''}$${Math.round(roi.netPosition).toLocaleString()}`, color: roi.netPosition >= 0 ? '#16A34A' : '#DC2626', bg: roi.netPosition >= 0 ? '#F0FDF4' : '#FFF1F2' },
+                              { label: roi.recoveredPct >= 100 ? 'Status' : 'Est. payoff', value: roi.payoffDate ?? '—', color: '#6D28D9', bg: '#F5F3FF' },
+                            ].map(s => (
+                              <div key={s.label} className="rounded-lg p-2.5 text-center" style={{ backgroundColor: s.bg }}>
+                                <p className="text-sm font-bold" style={{ color: s.color }}>{s.value}</p>
+                                <p className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>{s.label}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}

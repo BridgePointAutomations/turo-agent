@@ -130,6 +130,13 @@ create table if not exists conversation_messages (
 -- alter table maintenance add column if not exists cost numeric(10,2);
 -- alter table trips add constraint if not exists trips_guest_id_fkey foreign key (guest_id) references guests(id) on delete set null;
 
+-- ROI Tracker fields (run once against existing databases)
+alter table fleet add column if not exists purchase_price numeric(12,2);
+alter table fleet add column if not exists purchase_date date;
+alter table fleet add column if not exists financing_monthly numeric(10,2);
+alter table fleet add column if not exists financing_months int;
+alter table fleet add column if not exists depreciation_annual numeric(10,2);
+
 
 -- INDEXES
 create index if not exists trips_vehicle_id_idx on trips(vehicle_id);

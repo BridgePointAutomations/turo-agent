@@ -36,6 +36,11 @@ export default function GuestsPage() {
   const [guestTrips, setGuestTrips] = useState<Record<string, Trip[]>>({})
   const [loadingTrips, setLoadingTrips] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  // Search + filter
+  const [search, setSearch] = useState('')
+  const [flagFilter, setFlagFilter] = useState<'' | Guest['flag']>('')
+  // Template auto-fill
+  const [templateGuestId, setTemplateGuestId] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -77,26 +82,61 @@ export default function GuestsPage() {
     load()
   }
 
+  async function fetchTripsForGuest(guestId: string) {
+    if (guestTrips[guestId]) return
+    setLoadingTrips(prev => new Set(prev).add(guestId))
+    const data = await fetch(`/api/trips?guest_id=${guestId}`).then(r => r.json())
+    setGuestTrips(prev => ({ ...prev, [guestId]: Array.isArray(data) ? data : [] }))
+    setLoadingTrips(prev => { const s = new Set(prev); s.delete(guestId); return s })
+  }
+
   async function toggleTrips(guestId: string) {
     if (expandedTrips.has(guestId)) {
       setExpandedTrips(prev => { const s = new Set(prev); s.delete(guestId); return s })
       return
     }
     setExpandedTrips(prev => new Set(prev).add(guestId))
-    if (!guestTrips[guestId]) {
-      setLoadingTrips(prev => new Set(prev).add(guestId))
-      const data = await fetch(`/api/trips?guest_id=${guestId}`).then(r => r.json())
-      setGuestTrips(prev => ({ ...prev, [guestId]: Array.isArray(data) ? data : [] }))
-      setLoadingTrips(prev => { const s = new Set(prev); s.delete(guestId); return s })
-    }
+    fetchTripsForGuest(guestId)
+  }
+
+  async function selectTemplateGuest(id: string) {
+    setTemplateGuestId(id)
+    if (id) fetchTripsForGuest(id)
+  }
+
+  function getFilledTemplate(): string {
+    if (!template) return ''
+    const raw = TEMPLATES[template]
+    const guest = templateGuestId ? guests.find(g => g.id === templateGuestId) : null
+    if (!guest) return raw
+    const trips = guestTrips[guest.id] ?? []
+    const lastTrip = trips[0]
+    const carName = lastTrip
+      ? `${(lastTrip.fleet as any)?.year || ''} ${(lastTrip.fleet as any)?.make || ''} ${(lastTrip.fleet as any)?.model || ''}`.trim() || '[Car]'
+      : '[Car]'
+    return raw
+      .replace(/\[Guest Name\]/g, guest.name)
+      .replace(/\[Car\]/g, carName)
   }
 
   function copyTemplate() {
     if (!template) return
-    navigator.clipboard.writeText(TEMPLATES[template])
+    const text = getFilledTemplate()
+    navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  const filtered = guests.filter(g => {
+    const matchName = !search || g.name.toLowerCase().includes(search.toLowerCase())
+    const matchFlag = !flagFilter || g.flag === flagFilter
+    return matchName && matchFlag
+  })
+
+  const filledText = getFilledTemplate()
+  const hasAutoFill = templateGuestId && template && (
+    TEMPLATES[template].includes('[Guest Name]') || TEMPLATES[template].includes('[Car]')
+  )
 
   return (
     <div className="p-7 max-w-5xl mx-auto">
@@ -104,7 +144,11 @@ export default function GuestsPage() {
       <div className="flex items-center justify-between mb-7">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0F172A' }}>Guests</h1>
-          <p className="text-sm mt-1" style={{ color: '#64748B' }}>{guests.length} guest{guests.length !== 1 ? 's' : ''} tracked</p>
+          <p className="text-sm mt-1" style={{ color: '#64748B' }}>
+            {filtered.length !== guests.length
+              ? `${filtered.length} of ${guests.length} guests`
+              : `${guests.length} guest${guests.length !== 1 ? 's' : ''} tracked`}
+          </p>
         </div>
         <button onClick={() => setShowForm(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90"
@@ -116,6 +160,39 @@ export default function GuestsPage() {
         </button>
       </div>
 
+      {/* Search + flag filter */}
+      {guests.length > 0 && (
+        <div className="flex gap-2 mb-5">
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search guests…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full text-sm pl-9 pr-3 py-2 rounded-lg"
+              style={inputStyle}
+            />
+          </div>
+          <select value={flagFilter} onChange={e => setFlagFilter(e.target.value as any)}
+            className="text-sm px-3 py-2 rounded-lg" style={{ ...inputStyle, width: 'auto' }}>
+            <option value="">All flags</option>
+            {Object.entries(FLAG_CONFIG).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+          {(search || flagFilter) && (
+            <button onClick={() => { setSearch(''); setFlagFilter('') }}
+              className="text-sm px-3 py-2 rounded-lg"
+              style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Message templates */}
       <div className="bg-white rounded-xl p-5 mb-6" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
         <div className="flex items-center gap-2 mb-4">
@@ -126,7 +203,7 @@ export default function GuestsPage() {
           </div>
           <div>
             <h2 className="text-sm font-semibold" style={{ color: '#0F172A' }}>Message Templates</h2>
-            <p className="text-xs" style={{ color: '#94A3B8' }}>Pre-written messages for common situations</p>
+            <p className="text-xs" style={{ color: '#94A3B8' }}>Select a template, then pick a guest to auto-fill placeholders</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 mb-3">
@@ -141,15 +218,39 @@ export default function GuestsPage() {
           ))}
         </div>
         {template && (
-          <div className="relative">
-            <textarea readOnly value={TEMPLATES[template]} className="w-full text-sm p-3.5 rounded-lg resize-none"
-              rows={5}
-              style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', color: '#374151', outline: 'none' }} />
-            <button onClick={copyTemplate}
-              className="absolute top-2.5 right-2.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
-              style={{ border: '1px solid #E2E8F0', color: copied ? '#16A34A' : '#64748B', backgroundColor: copied ? '#F0FDF4' : 'white' }}>
-              {copied ? '✓ Copied' : 'Copy'}
-            </button>
+          <div>
+            {/* Guest selector for auto-fill */}
+            {guests.length > 0 && (
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-medium" style={{ color: '#374151' }}>Fill for:</span>
+                <select
+                  value={templateGuestId}
+                  onChange={e => selectTemplateGuest(e.target.value)}
+                  className="text-sm px-3 py-1.5 rounded-lg flex-1"
+                  style={inputStyle}>
+                  <option value="">— no guest (use placeholders) —</option>
+                  {guests.map(g => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+                {hasAutoFill && (
+                  <span className="text-xs px-2 py-1 rounded-full font-medium"
+                    style={{ backgroundColor: '#F0FDF4', color: '#16A34A' }}>
+                    Auto-filled
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="relative">
+              <textarea readOnly value={filledText} className="w-full text-sm p-3.5 rounded-lg resize-none"
+                rows={5}
+                style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', color: '#374151', outline: 'none' }} />
+              <button onClick={copyTemplate}
+                className="absolute top-2.5 right-2.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
+                style={{ border: '1px solid #E2E8F0', color: copied ? '#16A34A' : '#64748B', backgroundColor: copied ? '#F0FDF4' : 'white' }}>
+                {copied ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -199,7 +300,7 @@ export default function GuestsPage() {
       )}
 
       {/* Guest cards */}
-      {guests.length === 0 ? (
+      {filtered.length === 0 && guests.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 rounded-xl bg-white" style={{ border: '2px dashed #E2E8F0' }}>
           <div className="w-14 h-14 rounded-lg flex items-center justify-center mb-4" style={{ backgroundColor: '#F5F3FF' }}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -210,9 +311,17 @@ export default function GuestsPage() {
           <p className="font-semibold text-base mb-1" style={{ color: '#0F172A' }}>No guests tracked yet</p>
           <p className="text-sm" style={{ color: '#64748B' }}>Add guests to track ratings, notes, and flags</p>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 rounded-xl bg-white" style={{ border: '2px dashed #E2E8F0' }}>
+          <p className="font-semibold text-sm mb-1" style={{ color: '#0F172A' }}>No guests match your filters</p>
+          <button onClick={() => { setSearch(''); setFlagFilter('') }}
+            className="text-xs mt-2 font-medium hover:underline" style={{ color: '#1D9E75' }}>
+            Clear filters
+          </button>
+        </div>
       ) : (
         <div className="space-y-3">
-          {guests.map(g => {
+          {filtered.map(g => {
             const flagCfg = FLAG_CONFIG[g.flag] || FLAG_CONFIG.none
             const initials = g.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
             const isEditing = editingId === g.id
@@ -223,7 +332,7 @@ export default function GuestsPage() {
               <div key={g.id} className="bg-white rounded-xl" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                 {/* Confirm delete overlay */}
                 {confirmDelete === g.id && (
-                  <div className="p-4 rounded-lg flex items-center justify-between gap-3"
+                  <div className="p-4 rounded-xl flex items-center justify-between gap-3"
                     style={{ backgroundColor: '#FFF1F2', border: '1px solid #FECDD3' }}>
                     <p className="text-sm font-medium" style={{ color: '#E11D48' }}>
                       Delete {g.name}? Their linked trips will not be deleted.
@@ -246,7 +355,6 @@ export default function GuestsPage() {
                 {confirmDelete !== g.id && (
                   <div className="p-4">
                     {isEditing ? (
-                      /* Edit form */
                       <div>
                         <p className="text-xs font-semibold mb-3" style={{ color: '#64748B' }}>EDITING GUEST</p>
                         <div className="grid grid-cols-2 gap-3 mb-3">
@@ -289,22 +397,39 @@ export default function GuestsPage() {
                         </div>
                       </div>
                     ) : (
-                      /* Normal card view */
                       <>
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
+                        {/* Main row */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-3">
                             <div className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0"
                               style={{ backgroundColor: '#EFF6FF', color: '#2563EB' }}>
                               {initials}
                             </div>
                             <div>
                               <p className="text-sm font-semibold" style={{ color: '#0F172A' }}>{g.name}</p>
-                              {g.avg_rating && (
-                                <p className="text-xs font-medium" style={{ color: '#F59E0B' }}>★ {g.avg_rating} avg rating</p>
-                              )}
+                              {/* Inline stat chips */}
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                {g.total_trips > 0 && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                    style={{ backgroundColor: '#EFF6FF', color: '#2563EB' }}>
+                                    {g.total_trips} trip{g.total_trips !== 1 ? 's' : ''}
+                                  </span>
+                                )}
+                                {g.avg_rating != null && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                    style={{ backgroundColor: '#FFFBEB', color: '#D97706' }}>
+                                    ★ {g.avg_rating} avg
+                                  </span>
+                                )}
+                                {g.last_trip_date && (
+                                  <span className="text-xs" style={{ color: '#94A3B8' }}>
+                                    Last: {g.last_trip_date}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-shrink-0">
                             <select value={g.flag} onChange={e => updateFlag(g.id, e.target.value as any)}
                               className="text-xs px-2 py-1 rounded-lg cursor-pointer font-medium border-0"
                               style={{ backgroundColor: flagCfg.bg, color: flagCfg.text, outline: 'none' }}>
@@ -333,27 +458,24 @@ export default function GuestsPage() {
                         </div>
 
                         {g.notes && (
-                          <p className="text-xs italic mb-3 px-3 py-2 rounded-lg" style={{ color: '#64748B', backgroundColor: '#F8FAFC' }}>
+                          <p className="text-xs italic mt-3 px-3 py-2 rounded-lg" style={{ color: '#64748B', backgroundColor: '#F8FAFC' }}>
                             "{g.notes}"
                           </p>
                         )}
 
-                        <div className="flex items-center gap-4 text-xs pt-2" style={{ borderTop: '1px solid #F1F5F9', color: '#94A3B8' }}>
+                        {/* Footer row */}
+                        <div className="flex items-center gap-4 mt-3 pt-3 text-xs" style={{ borderTop: '1px solid #F1F5F9', color: '#94A3B8' }}>
                           {g.total_trips > 0 && (
                             <button onClick={() => toggleTrips(g.id)}
                               className="flex items-center gap-1 hover:opacity-70 font-medium"
                               style={{ color: '#1D9E75' }}>
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M9 11l3 3L22 4"/>
-                              </svg>
-                              {g.total_trips} trip{g.total_trips !== 1 ? 's' : ''}
+                              {tripsExpanded ? 'Hide trips' : 'View trip history'}
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
                                 style={{ transform: tripsExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
                                 <polyline points="6 9 12 15 18 9"/>
                               </svg>
                             </button>
                           )}
-                          {g.last_trip_date && <span>Last: {g.last_trip_date}</span>}
                           {g.turo_profile_url && (
                             <a href={g.turo_profile_url} target="_blank" rel="noreferrer"
                               className="ml-auto font-medium hover:underline" style={{ color: '#1D9E75' }}>

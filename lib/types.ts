@@ -19,6 +19,11 @@ export interface Vehicle {
   status: VehicleStatus
   turo_listing_id?: string
   notes?: string
+  purchase_price?: number
+  purchase_date?: string
+  financing_monthly?: number
+  financing_months?: number
+  depreciation_annual?: number
 }
 
 export interface Trip {

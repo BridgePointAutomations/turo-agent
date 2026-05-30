@@ -96,6 +96,43 @@ export default function ReportsPage() {
     )
   }
 
+  // Schedule C computation
+  const expByCat = (cats: string[]) =>
+    filteredExpenses.filter(e => cats.includes(e.category)).reduce((s, e) => s + Number(e.amount || 0), 0)
+
+  const carTruck = expByCat(['fuel', 'registration', 'parking'])
+  const schedCInsurance = expByCat(['insurance'])
+  const repairs = expByCat(['maintenance'])
+  const otherExp = expByCat(['cleaning', 'other'])
+  const totalDeductions = carTruck + schedCInsurance + repairs + otherExp
+  const schedC = {
+    grossReceipts: totals.gross,
+    turoFees: totals.turoFees,
+    netFromTuro: totals.netRevenue,
+    carTruck,
+    insurance: schedCInsurance,
+    repairs,
+    other: otherExp,
+    totalDeductions,
+    netProfit: totals.netRevenue - totalDeductions,
+  }
+
+  function exportScheduleC() {
+    const rows = [
+      { line: 'Line 1', description: 'Gross receipts (trip revenue)', amount: schedC.grossReceipts.toFixed(2) },
+      { line: 'Line 2', description: 'Returns & allowances (Turo platform fees)', amount: (-schedC.turoFees).toFixed(2) },
+      { line: 'Line 7', description: 'Gross income (net from Turo)', amount: schedC.netFromTuro.toFixed(2) },
+      { line: '', description: '--- DEDUCTIONS ---', amount: '' },
+      { line: 'Line 9', description: 'Car & truck (fuel, registration, parking)', amount: (-schedC.carTruck).toFixed(2) },
+      { line: 'Line 15', description: 'Insurance', amount: (-schedC.insurance).toFixed(2) },
+      { line: 'Line 22', description: 'Repairs & maintenance', amount: (-schedC.repairs).toFixed(2) },
+      { line: 'Line 27a', description: 'Other expenses (cleaning, other)', amount: (-schedC.other).toFixed(2) },
+      { line: 'Line 28', description: 'Total deductions', amount: (-schedC.totalDeductions).toFixed(2) },
+      { line: 'Line 31', description: 'Net profit / loss', amount: (schedC.netProfit).toFixed(2) },
+    ]
+    downloadCSV(rows, `turo-schedule-c-${yearFilter}.csv`)
+  }
+
   const fmt = (n: number) => '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 })
   const fmtPct = (n: number) => n.toFixed(1) + '%'
 
@@ -243,6 +280,98 @@ export default function ReportsPage() {
                 )
               })
               .filter(Boolean)}
+          </div>
+        </div>
+      )}
+
+      {/* Schedule C Tax Prep */}
+      {(filteredTrips.length > 0 || filteredExpenses.length > 0) && (
+        <div className="mt-6 bg-white rounded-xl" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+          <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid #E2E8F0' }}>
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: '#0F172A' }}>Schedule C Summary — {yearFilter}</h2>
+              <p className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>IRS Schedule C (Profit or Loss from Business) — for personal review only</p>
+            </div>
+            <button onClick={exportScheduleC}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium hover:opacity-90"
+              style={{ border: '1px solid #E2E8F0', color: '#374151', backgroundColor: 'white' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Export CSV
+            </button>
+          </div>
+          <div className="p-5">
+            {/* Income section */}
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94A3B8' }}>Income</p>
+            <div className="space-y-1 mb-4">
+              {[
+                { line: 'Line 1', label: 'Gross receipts (trip revenue)', amount: schedC.grossReceipts, color: '#0F172A' },
+                { line: 'Line 2', label: 'Turo platform fees (returns & allowances)', amount: -schedC.turoFees, color: '#DC2626' },
+                { line: 'Line 7', label: 'Gross income (net from Turo)', amount: schedC.netFromTuro, color: '#1D9E75', bold: true },
+              ].map(r => (
+                <div key={r.line} className="flex items-center justify-between py-1.5 px-3 rounded-lg"
+                  style={{ backgroundColor: r.bold ? '#F0FDF4' : '#F8FAFC' }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: '#E2E8F0', color: '#64748B', minWidth: 48, textAlign: 'center' }}>
+                      {r.line}
+                    </span>
+                    <span className="text-sm" style={{ color: '#374151', fontWeight: r.bold ? 600 : 400 }}>{r.label}</span>
+                  </div>
+                  <span className="text-sm font-semibold" style={{ color: r.color }}>
+                    {r.amount < 0 ? '−' : ''}{fmt(Math.abs(r.amount))}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Deductions section */}
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94A3B8' }}>Deductions</p>
+            <div className="space-y-1 mb-4">
+              {[
+                { line: 'Line 9', label: 'Car & truck expenses (fuel, registration, parking)', amount: schedC.carTruck },
+                { line: 'Line 15', label: 'Insurance', amount: schedC.insurance },
+                { line: 'Line 22', label: 'Repairs & maintenance', amount: schedC.repairs },
+                { line: 'Line 27a', label: 'Other expenses (cleaning, other)', amount: schedC.other },
+                { line: 'Line 28', label: 'Total deductions', amount: schedC.totalDeductions, bold: true },
+              ].map(r => (
+                <div key={r.line} className="flex items-center justify-between py-1.5 px-3 rounded-lg"
+                  style={{ backgroundColor: r.bold ? '#FFF5F5' : '#F8FAFC' }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: '#E2E8F0', color: '#64748B', minWidth: 48, textAlign: 'center' }}>
+                      {r.line}
+                    </span>
+                    <span className="text-sm" style={{ color: '#374151', fontWeight: r.bold ? 600 : 400 }}>{r.label}</span>
+                  </div>
+                  <span className="text-sm font-semibold" style={{ color: r.amount > 0 ? '#DC2626' : '#94A3B8' }}>
+                    {r.amount > 0 ? `−${fmt(r.amount)}` : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Net profit */}
+            <div className="flex items-center justify-between py-3 px-4 rounded-xl"
+              style={{
+                backgroundColor: schedC.netProfit >= 0 ? '#F0FDF4' : '#FFF1F2',
+                border: `1px solid ${schedC.netProfit >= 0 ? '#BBF7D0' : '#FECDD3'}`,
+              }}>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono px-1.5 py-0.5 rounded font-bold" style={{ backgroundColor: '#E2E8F0', color: '#64748B' }}>
+                  Line 31
+                </span>
+                <span className="text-sm font-bold" style={{ color: schedC.netProfit >= 0 ? '#065F46' : '#991B1B' }}>
+                  Net profit / loss
+                </span>
+              </div>
+              <span className="text-lg font-bold" style={{ color: schedC.netProfit >= 0 ? '#16A34A' : '#DC2626' }}>
+                {schedC.netProfit >= 0 ? '' : '−'}{fmt(Math.abs(schedC.netProfit))}
+              </span>
+            </div>
+
+            <p className="text-xs mt-3" style={{ color: '#94A3B8' }}>
+              Disclaimer: This is an estimate based on your logged data. Consult a tax professional before filing.
+            </p>
           </div>
         </div>
       )}
