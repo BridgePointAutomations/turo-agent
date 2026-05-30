@@ -196,6 +196,8 @@ export default function TripsPage() {
       else delete payload.end_mileage
       if (form.actual_payout !== '') payload.actual_payout = Number(form.actual_payout)
       else delete payload.actual_payout
+      if (!(form.guest_rating >= 1 && form.guest_rating <= 5)) delete payload.guest_rating
+      if (!(form.host_rating >= 1 && form.host_rating <= 5)) delete payload.host_rating
       if (receipt_url) payload.receipt_url = receipt_url
       if (lineItems.length > 0) payload.line_items = lineItems
 
