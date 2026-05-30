@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import ChatPanel from '@/components/ChatPanel'
+import AITipsPanel from '@/components/AITipsPanel'
 import StatCard from '@/components/StatCard'
 import type { Vehicle, Trip, Expense, MaintenanceItem } from '@/lib/types'
 
@@ -95,8 +95,8 @@ export default function DashboardPage() {
         <StatCard label="Active Vehicles" value={activeVehicles} sub={`${vehicles.length - activeVehicles} inactive`} color="blue" />
       </div>
 
-      {/* Main: fluid left + fixed-width Fleet Advisor */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 items-start">
+      {/* Main: fluid left + fixed-width tips panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start">
 
         {/* Left column: data panels */}
         <div className="flex flex-col gap-5">
@@ -238,15 +238,15 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Right column: Fleet Advisor — sticky, fills viewport height */}
-        <div className="hidden lg:block sticky top-7" style={{ height: 'calc(100vh - 3.5rem)' }}>
-          <ChatPanel />
+        {/* Right column: AI Recommendations */}
+        <div className="hidden lg:block sticky top-7">
+          <AITipsPanel />
         </div>
       </div>
 
-      {/* Mobile: Fleet Advisor below data panels */}
-      <div className="lg:hidden mt-5" style={{ height: '480px' }}>
-        <ChatPanel />
+      {/* Mobile: AI Recommendations below data panels */}
+      <div className="lg:hidden mt-5">
+        <AITipsPanel />
       </div>
     </div>
   )

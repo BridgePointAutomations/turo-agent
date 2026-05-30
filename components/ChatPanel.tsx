@@ -38,7 +38,12 @@ const WELCOME: ChatMessage = {
   content: "Fleet Advisor — ask anything about pricing, guests, maintenance, or your financials.",
 }
 
-export default function ChatPanel() {
+interface ChatPanelProps {
+  pendingPrompt?: string | null
+  onPromptConsumed?: () => void
+}
+
+export default function ChatPanel({ pendingPrompt, onPromptConsumed }: ChatPanelProps = {}) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME])
@@ -49,6 +54,14 @@ export default function ChatPanel() {
   const [titleInput, setTitleInput] = useState('')
   const [confirmDeleteConv, setConfirmDeleteConv] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (pendingPrompt) {
+      send(pendingPrompt)
+      onPromptConsumed?.()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPrompt])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
