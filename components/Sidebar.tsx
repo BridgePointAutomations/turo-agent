@@ -83,31 +83,22 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <p className="text-xs font-medium px-3 mb-3 uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.5)' }}>Main Menu</p>
         {nav.map(item => {
           const active = path === item.href || (item.href !== '/dashboard' && path.startsWith(item.href))
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                active
-                  ? 'text-white'
-                  : 'hover:text-white'
-              }`}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all hover:text-white"
               style={active
                 ? { backgroundColor: 'rgba(29,158,117,0.2)', color: '#4ade80' }
                 : { color: 'var(--sidebar-text)' }
               }
             >
-              <span className={`flex-shrink-0 transition-colors ${active ? '' : ''}`}
-                style={{ color: active ? '#4ade80' : 'var(--sidebar-text)' }}>
+              <span className="flex-shrink-0 transition-colors" style={{ color: active ? '#4ade80' : 'var(--sidebar-text)' }}>
                 {item.icon}
               </span>
               {item.label}
-              {active && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#4ade80' }} />
-              )}
             </Link>
           )
         })}
@@ -122,7 +113,6 @@ export default function Sidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-white truncate">Turo Host</p>
-            <p className="text-xs truncate" style={{ color: 'var(--sidebar-text)' }}>v1.0 · Professional</p>
           </div>
         </div>
       </div>

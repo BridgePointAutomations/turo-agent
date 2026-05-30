@@ -142,7 +142,7 @@ export default function GuestsPage() {
         </div>
         {template && (
           <div className="relative">
-            <textarea readOnly value={TEMPLATES[template]} className="w-full text-sm p-3.5 rounded-xl resize-none"
+            <textarea readOnly value={TEMPLATES[template]} className="w-full text-sm p-3.5 rounded-lg resize-none"
               rows={5}
               style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', color: '#374151', outline: 'none' }} />
             <button onClick={copyTemplate}
@@ -201,7 +201,7 @@ export default function GuestsPage() {
       {/* Guest cards */}
       {guests.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 rounded-xl bg-white" style={{ border: '2px dashed #E2E8F0' }}>
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: '#F5F3FF' }}>
+          <div className="w-14 h-14 rounded-lg flex items-center justify-center mb-4" style={{ backgroundColor: '#F5F3FF' }}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
               <circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
@@ -223,7 +223,7 @@ export default function GuestsPage() {
               <div key={g.id} className="bg-white rounded-xl" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                 {/* Confirm delete overlay */}
                 {confirmDelete === g.id && (
-                  <div className="p-4 rounded-xl flex items-center justify-between gap-3"
+                  <div className="p-4 rounded-lg flex items-center justify-between gap-3"
                     style={{ backgroundColor: '#FFF1F2', border: '1px solid #FECDD3' }}>
                     <p className="text-sm font-medium" style={{ color: '#E11D48' }}>
                       Delete {g.name}? Their linked trips will not be deleted.
@@ -293,7 +293,7 @@ export default function GuestsPage() {
                       <>
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0"
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0"
                               style={{ backgroundColor: '#EFF6FF', color: '#2563EB' }}>
                               {initials}
                             </div>

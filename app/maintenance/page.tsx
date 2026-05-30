@@ -246,7 +246,7 @@ export default function MaintenancePage() {
 
               {/* Confirm delete */}
               {confirmDelete === item.id && (
-                <div className="p-4 rounded-xl flex items-center justify-between gap-3"
+                <div className="p-4 rounded-lg flex items-center justify-between gap-3"
                   style={{ backgroundColor: '#FFF1F2', border: '1px solid #FECDD3' }}>
                   <p className="text-sm font-medium" style={{ color: '#E11D48' }}>
                     Delete {item.service_type} for {(item.fleet as any)?.make} {(item.fleet as any)?.model}?
@@ -408,7 +408,7 @@ export default function MaintenancePage() {
 
         {filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 rounded-xl bg-white" style={{ border: '2px dashed #E2E8F0' }}>
-            <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: '#FFFBEB' }}>
+            <div className="w-14 h-14 rounded-lg flex items-center justify-center mb-4" style={{ backgroundColor: '#FFFBEB' }}>
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
               </svg>

@@ -28,10 +28,24 @@ const STATUS_CFG: Record<string, { bg: string; text: string }> = {
   cancelled: { bg: '#F1F5F9', text: '#64748B' },
 }
 
-const FLAG_ICONS: Record<string, string> = {
-  great: '★',
-  caution: '⚠',
-  blocked: '🚫',
+const FlagIcon = ({ flag }: { flag: string }) => {
+  if (flag === 'great') return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    </svg>
+  )
+  if (flag === 'caution') return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  )
+  if (flag === 'blocked') return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+    </svg>
+  )
+  return null
 }
 
 const LINE_ITEM_TYPES = [
@@ -241,15 +255,17 @@ export default function TripsPage() {
 
           {/* Blocked guest warning */}
           {selectedGuest?.flag === 'blocked' && (
-            <div className="mb-4 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2"
+            <div className="mb-4 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2"
               style={{ backgroundColor: '#FFF1F2', border: '1px solid #FECDD3', color: '#E11D48' }}>
-              🚫 This guest is flagged as BLOCKED. Proceed with caution.
+              <FlagIcon flag="blocked" />
+              This guest is flagged as BLOCKED. Proceed with caution.
             </div>
           )}
           {selectedGuest?.flag === 'caution' && (
-            <div className="mb-4 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2"
+            <div className="mb-4 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2"
               style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', color: '#D97706' }}>
-              ⚠ This guest is flagged as CAUTION. Review their history before confirming.
+              <FlagIcon flag="caution" />
+              This guest is flagged as CAUTION. Review their history before confirming.
             </div>
           )}
 
@@ -282,15 +298,15 @@ export default function TripsPage() {
               />
               {showGuestDropdown && guestSearch.length > 0 && (
                 <div ref={guestDropdownRef}
-                  className="absolute z-20 w-full mt-1 bg-white rounded-xl overflow-hidden"
+                  className="absolute z-20 w-full mt-1 bg-white rounded-lg overflow-hidden"
                   style={{ border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto' }}>
                   {filteredGuests.length > 0 && filteredGuests.map(g => (
                     <button key={g.id} onMouseDown={() => selectGuest(g)}
                       className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 hover:bg-gray-50">
                       <span className="font-medium" style={{ color: '#0F172A' }}>{g.name}</span>
                       {g.flag !== 'none' && (
-                        <span className="text-xs" style={{ color: g.flag === 'blocked' ? '#E11D48' : g.flag === 'caution' ? '#D97706' : '#16A34A' }}>
-                          {FLAG_ICONS[g.flag]}
+                        <span className="inline-flex" style={{ color: g.flag === 'blocked' ? '#E11D48' : g.flag === 'caution' ? '#D97706' : '#16A34A' }}>
+                          <FlagIcon flag={g.flag} />
                         </span>
                       )}
                       {g.total_trips > 0 && (
@@ -468,7 +484,7 @@ export default function TripsPage() {
 
           {/* Revenue preview */}
           {displayGross > 0 && (
-            <div className="mt-4 p-4 rounded-xl" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+            <div className="mt-4 p-4 rounded-lg" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }}>
               {baseRevenue > 0 && (
                 <div className="text-xs mb-2 space-y-1" style={{ color: '#065F46' }}>
                   {form.start_date && form.end_date && (
@@ -520,7 +536,7 @@ export default function TripsPage() {
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 rounded-xl bg-white" style={{ border: '2px dashed #E2E8F0' }}>
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: '#F0FDF4' }}>
+          <div className="w-14 h-14 rounded-lg flex items-center justify-center mb-4" style={{ backgroundColor: '#F0FDF4' }}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
             </svg>
@@ -556,9 +572,9 @@ export default function TripsPage() {
                     <td className="px-4 py-3.5 font-semibold" style={{ color: '#0F172A' }}>
                       <span>{t.guest_name}</span>
                       {guestFlag && guestFlag !== 'none' && (
-                        <span className="ml-1.5 text-xs"
+                        <span className="ml-1.5 inline-flex"
                           style={{ color: guestFlag === 'blocked' ? '#E11D48' : guestFlag === 'caution' ? '#D97706' : '#16A34A' }}>
-                          {FLAG_ICONS[guestFlag]}
+                          <FlagIcon flag={guestFlag} />
                         </span>
                       )}
                       {t.receipt_url && (
@@ -606,7 +622,12 @@ export default function TripsPage() {
                     </td>
                     <td className="px-4 py-3.5 text-right">
                       {t.host_rating
-                        ? <span className="font-medium" style={{ color: '#F59E0B' }}>★ {t.host_rating}</span>
+                        ? <span className="font-medium inline-flex items-center gap-1" style={{ color: '#F59E0B' }}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                            </svg>
+                            {t.host_rating}
+                          </span>
                         : <span style={{ color: '#E2E8F0' }}>—</span>}
                     </td>
                     <td className="px-4 py-3.5">

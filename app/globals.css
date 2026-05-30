@@ -55,6 +55,19 @@ input:focus, select:focus, textarea:focus {
 /* Table row hover */
 .data-table tbody tr:hover { background: #F8FAFC; }
 
+/* Quick prompt chips */
+.quick-prompt {
+  border: 1px solid #E2E8F0;
+  color: #64748B;
+  background-color: white;
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+.quick-prompt:hover {
+  background-color: #1D9E75;
+  color: white;
+  border-color: transparent;
+}
+
 /* Status badge base */
 .badge {
   display: inline-flex;

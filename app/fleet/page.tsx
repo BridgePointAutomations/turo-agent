@@ -39,6 +39,8 @@ export default function FleetPage() {
   const [docFile, setDocFile] = useState<File | null>(null)
   const [savingDoc, setSavingDoc] = useState(false)
   const [uploadingDoc, setUploadingDoc] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [confirmDeleteDoc, setConfirmDeleteDoc] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
@@ -100,12 +102,12 @@ export default function FleetPage() {
   }
 
   async function removeDoc(doc: VehicleDocument) {
-    if (!confirm('Remove this document?')) return
     await fetch('/api/documents', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: doc.id, storage_path: doc.storage_path, bucket: 'vehicle-docs' }),
     })
+    setConfirmDeleteDoc(null)
     loadDocs(doc.vehicle_id)
   }
 
@@ -125,8 +127,10 @@ export default function FleetPage() {
   }
 
   async function remove(id: string) {
-    if (!confirm('Remove this vehicle? All related data will be deleted.')) return
     await fetch('/api/fleet', { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id }) })
+    setConfirmDelete(null)
+    setShowForm(false)
+    setEditing(null)
     load()
   }
 
@@ -202,7 +206,7 @@ export default function FleetPage() {
               />
             </div>
           </div>
-          <div className="flex gap-2 mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
+          <div className="flex items-center gap-2 mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
             <button onClick={save} disabled={saving || !form.make || !form.model}
               className="px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 transition-all hover:opacity-90"
               style={{ backgroundColor: '#1D9E75' }}>
@@ -213,6 +217,29 @@ export default function FleetPage() {
               style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
               Cancel
             </button>
+            {editing && (
+              confirmDelete === editing ? (
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-xs" style={{ color: '#64748B' }}>Delete this vehicle?</span>
+                  <button onClick={() => remove(editing)}
+                    className="text-xs px-2.5 py-1 rounded-md font-medium text-white"
+                    style={{ backgroundColor: '#DC2626' }}>
+                    Confirm
+                  </button>
+                  <button onClick={() => setConfirmDelete(null)}
+                    className="text-xs px-2.5 py-1 rounded-md font-medium"
+                    style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirmDelete(editing)}
+                  className="ml-auto text-xs font-medium transition-colors hover:underline"
+                  style={{ color: '#DC2626' }}>
+                  Delete vehicle
+                </button>
+              )
+            )}
           </div>
         </div>
       )}
@@ -220,7 +247,7 @@ export default function FleetPage() {
       {/* Empty state */}
       {vehicles.length === 0 && !showForm ? (
         <div className="flex flex-col items-center justify-center py-20 rounded-xl bg-white" style={{ border: '2px dashed #E2E8F0' }}>
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: '#EFF6FF' }}>
+          <div className="w-14 h-14 rounded-lg flex items-center justify-center mb-4" style={{ backgroundColor: '#EFF6FF' }}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v5"/>
               <circle cx="16" cy="17" r="2"/><circle cx="7" cy="17" r="2"/>
@@ -237,7 +264,7 @@ export default function FleetPage() {
               <div key={v.id} className="bg-white rounded-xl p-5" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#EFF6FF' }}>
+                    <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#EFF6FF' }}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v5"/>
                         <circle cx="16" cy="17" r="2"/><circle cx="7" cy="17" r="2"/>
@@ -280,11 +307,6 @@ export default function FleetPage() {
                     style={{ border: '1px solid #E2E8F0', color: expandedDocs === v.id ? '#1D9E75' : '#374151', backgroundColor: expandedDocs === v.id ? '#F0FDF4' : '#F8FAFC' }}>
                     Documents
                   </button>
-                  <button onClick={() => remove(v.id)}
-                    className="flex-1 text-xs py-2 rounded-lg font-medium transition-colors"
-                    style={{ border: '1px solid #FEE2E2', color: '#DC2626', backgroundColor: '#FFF5F5' }}>
-                    Remove
-                  </button>
                 </div>
 
                 {/* Documents vault */}
@@ -300,7 +322,7 @@ export default function FleetPage() {
                     </div>
 
                     {showDocForm === v.id && (
-                      <div className="mb-3 p-3 rounded-xl" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                      <div className="mb-3 p-3 rounded-lg" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
                         <div className="grid grid-cols-2 gap-2 mb-2">
                           <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Name</label>
@@ -355,16 +377,37 @@ export default function FleetPage() {
                                   {d.name}
                                 </a>
                                 {d.expiry_date && (
-                                  <span className="text-xs flex-shrink-0" style={{ color: expiring ? '#D97706' : '#94A3B8' }}>
-                                    {expiring ? '⚠ ' : ''}exp {d.expiry_date}
+                                  <span className="text-xs flex-shrink-0 flex items-center gap-1" style={{ color: expiring ? '#D97706' : '#94A3B8' }}>
+                                    {expiring && (
+                                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                                      </svg>
+                                    )}
+                                    exp {d.expiry_date}
                                   </span>
                                 )}
                               </div>
-                              <button onClick={() => removeDoc(d)} className="flex-shrink-0 ml-2 p-1 rounded hover:bg-red-50">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                                </svg>
-                              </button>
+                              {confirmDeleteDoc === d.id ? (
+                                <div className="flex items-center gap-1 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                                  <button onClick={() => removeDoc(d)}
+                                    className="text-xs px-1.5 py-0.5 rounded font-medium text-white"
+                                    style={{ backgroundColor: '#DC2626' }}>
+                                    Delete
+                                  </button>
+                                  <button onClick={() => setConfirmDeleteDoc(null)}
+                                    className="text-xs px-1.5 py-0.5 rounded font-medium"
+                                    style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
+                                    No
+                                  </button>
+                                </div>
+                              ) : (
+                                <button onClick={() => setConfirmDeleteDoc(d.id)} className="flex-shrink-0 ml-2 p-1 rounded hover:bg-red-50">
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                  </svg>
+                                </button>
+                              )}
                             </div>
                           )
                         })}

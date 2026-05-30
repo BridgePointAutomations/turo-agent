@@ -27,6 +27,7 @@ export default function ExpensesPage() {
   const [uploading, setUploading] = useState(false)
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [filter, setFilter] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
@@ -61,8 +62,8 @@ export default function ExpensesPage() {
   }
 
   async function remove(id: string) {
-    if (!confirm('Remove this expense?')) return
     await fetch('/api/expenses', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) })
+    setConfirmDelete(null)
     load()
   }
 
@@ -193,7 +194,7 @@ export default function ExpensesPage() {
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 rounded-xl bg-white" style={{ border: '2px dashed #E2E8F0' }}>
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: '#FFF1F2' }}>
+          <div className="w-14 h-14 rounded-lg flex items-center justify-center mb-4" style={{ backgroundColor: '#FFF1F2' }}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E11D48" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>
             </svg>
@@ -235,14 +236,29 @@ export default function ExpensesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-right">
-                      <button onClick={() => remove(e.id)}
-                        className="p-1 rounded transition-colors hover:bg-red-50"
-                        title="Remove expense">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                          <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                        </svg>
-                      </button>
+                      {confirmDelete === e.id ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button onClick={() => remove(e.id)}
+                            className="text-xs px-2 py-0.5 rounded-md font-medium text-white"
+                            style={{ backgroundColor: '#DC2626' }}>
+                            Delete
+                          </button>
+                          <button onClick={() => setConfirmDelete(null)}
+                            className="text-xs px-2 py-0.5 rounded-md font-medium"
+                            style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmDelete(e.id)}
+                          className="p-1 rounded transition-colors hover:bg-red-50"
+                          title="Remove expense">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                            <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                          </svg>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

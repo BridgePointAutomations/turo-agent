@@ -4,13 +4,9 @@ import type { ChatMessage, Conversation } from '@/lib/types'
 
 const QUICK_PROMPTS = [
   'How should I price my car this weekend?',
-  'Write a welcome message for my next guest',
   'What maintenance is due and what will it cost?',
   'Summarize my tax deductions this year',
-  'How do I improve my listing ranking?',
-  'Which protection plan should I use?',
   'Analyze my most profitable vehicle',
-  'Write a post-trip review request message',
 ]
 
 function formatMessage(text: string) {
@@ -39,7 +35,7 @@ function timeAgo(dateStr: string) {
 
 const WELCOME: ChatMessage = {
   role: 'assistant',
-  content: "Hi! I'm your TuroAgent advisor with full context on your fleet, trips, and financials. Ask me anything about pricing, guests, maintenance, or growing your Turo business.",
+  content: "Fleet Advisor — ask anything about pricing, guests, maintenance, or your financials.",
 }
 
 export default function ChatPanel() {
@@ -271,12 +267,8 @@ export default function ChatPanel() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold truncate" style={{ color: '#0F172A' }}>
-              {activeTitle ?? 'AI Advisor'}
+              {activeTitle ?? 'Fleet Advisor'}
             </p>
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-              <p className="text-xs" style={{ color: '#64748B' }}>Knows your fleet & financials</p>
-            </div>
           </div>
         </div>
 
@@ -325,13 +317,10 @@ export default function ChatPanel() {
         </div>
 
         {/* Quick prompts */}
-        <div className="px-4 pt-3 pb-2 flex flex-wrap gap-1.5" style={{ borderTop: '1px solid #F1F5F9', backgroundColor: 'white' }}>
+        <div className="px-4 pt-3 pb-2 flex gap-1.5 overflow-x-auto" style={{ borderTop: '1px solid #F1F5F9', backgroundColor: 'white' }}>
           {QUICK_PROMPTS.map(p => (
             <button key={p} onClick={() => send(p)}
-              className="text-xs px-2.5 py-1 rounded-full transition-colors"
-              style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}
-              onMouseEnter={e => { const t = e.target as HTMLButtonElement; t.style.backgroundColor = '#1D9E75'; t.style.color = 'white'; t.style.borderColor = 'transparent' }}
-              onMouseLeave={e => { const t = e.target as HTMLButtonElement; t.style.backgroundColor = 'white'; t.style.color = '#64748B'; t.style.borderColor = '#E2E8F0' }}>
+              className="quick-prompt text-xs px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0">
               {p}
             </button>
           ))}
