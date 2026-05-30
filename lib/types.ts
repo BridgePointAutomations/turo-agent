@@ -3,6 +3,7 @@ export type GuestFlag = 'none' | 'great' | 'caution' | 'blocked'
 export type TripStatus = 'upcoming' | 'active' | 'completed' | 'cancelled'
 export type MaintenanceStatus = 'ok' | 'due_soon' | 'overdue' | 'completed'
 export type ExpenseCategory = 'maintenance' | 'insurance' | 'fuel' | 'cleaning' | 'registration' | 'parking' | 'other'
+export type LineItemType = 'fee' | 'discount' | 'deposit' | 'delivery' | 'other'
 
 export interface Vehicle {
   id: string
@@ -38,6 +39,16 @@ export interface Trip {
   notes?: string
   status: TripStatus
   fleet?: Vehicle
+  guests?: Guest
+  line_items?: TripLineItem[]
+}
+
+export interface TripLineItem {
+  id: string
+  trip_id: string
+  label: string
+  amount: number
+  type: LineItemType
 }
 
 export interface Expense {
@@ -79,10 +90,27 @@ export interface MaintenanceItem {
   next_due_mileage?: number
   status: MaintenanceStatus
   notes?: string
+  cost?: number
   fleet?: Vehicle
 }
 
 export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface Conversation {
+  id: string
+  created_at: string
+  updated_at: string
+  title: string
+  message_count?: number
+}
+
+export interface ConversationMessage {
+  id: string
+  created_at: string
+  conversation_id: string
   role: 'user' | 'assistant'
   content: string
 }

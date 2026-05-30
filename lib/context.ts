@@ -7,7 +7,7 @@ export async function buildFleetContext(): Promise<FleetContext> {
 
   const [vehiclesRes, tripsRes, maintenanceRes, expensesRes] = await Promise.all([
     supabase.from('fleet').select('*').order('created_at'),
-    supabase.from('trips').select('*, fleet(make,model,year)').order('start_date', { ascending: false }).limit(10),
+    supabase.from('trips').select('*, fleet(make,model,year), guests(name,flag)').order('start_date', { ascending: false }).limit(10),
     supabase.from('maintenance').select('*, fleet(make,model,year)').in('status', ['due_soon', 'overdue']),
     supabase.from('expenses').select('amount').gte('date', yearStart),
   ])
@@ -37,9 +37,11 @@ export function buildSystemPrompt(ctx: FleetContext): string {
     : '  (No vehicles added yet)'
 
   const recentTripList = ctx.recentTrips.slice(0, 5).length
-    ? ctx.recentTrips.slice(0, 5).map(t =>
-      `  - ${t.start_date} → ${t.end_date} | Guest: ${t.guest_name} | Net: $${Number(t.net_revenue).toFixed(0)} | Rating: ${t.host_rating ?? 'pending'}★`
-    ).join('\n')
+    ? ctx.recentTrips.slice(0, 5).map(t => {
+        const flag = (t.guests as any)?.flag
+        const flagNote = flag && flag !== 'none' ? ` [${flag.toUpperCase()}]` : ''
+        return `  - ${t.start_date} → ${t.end_date} | Guest: ${t.guest_name}${flagNote} | Net: $${Number(t.net_revenue).toFixed(0)} | Rating: ${t.host_rating ?? 'pending'}★`
+      }).join('\n')
     : '  (No trips logged yet)'
 
   const maintenanceAlerts = ctx.openMaintenance.length

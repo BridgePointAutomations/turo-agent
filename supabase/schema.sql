@@ -83,13 +83,46 @@ create table if not exists maintenance (
   notes text
 );
 
+-- TRIP LINE ITEMS
+create table if not exists trip_line_items (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references trips(id) on delete cascade,
+  label text not null,
+  amount numeric(10,2) not null,
+  type text not null default 'fee' check (type in ('fee','discount','deposit','delivery','other'))
+);
+
+-- CONVERSATIONS (AI chat history)
+create table if not exists conversations (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  title text not null default 'New conversation'
+);
+
+create table if not exists conversation_messages (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  conversation_id uuid references conversations(id) on delete cascade,
+  role text not null check (role in ('user','assistant')),
+  content text not null
+);
+
+-- SCHEMA MIGRATIONS (run these if adding to an existing database)
+-- alter table maintenance add column if not exists cost numeric(10,2);
+-- alter table trips add constraint if not exists trips_guest_id_fkey foreign key (guest_id) references guests(id) on delete set null;
+
 -- INDEXES
 create index if not exists trips_vehicle_id_idx on trips(vehicle_id);
 create index if not exists trips_start_date_idx on trips(start_date);
+create index if not exists trips_guest_id_idx on trips(guest_id);
 create index if not exists expenses_vehicle_id_idx on expenses(vehicle_id);
 create index if not exists expenses_date_idx on expenses(date);
 create index if not exists maintenance_vehicle_id_idx on maintenance(vehicle_id);
 create index if not exists maintenance_status_idx on maintenance(status);
+create index if not exists trip_line_items_trip_id_idx on trip_line_items(trip_id);
+create index if not exists conversations_updated_at_idx on conversations(updated_at desc);
+create index if not exists conv_messages_conv_id_idx on conversation_messages(conversation_id);
 
 -- SEED: Default maintenance schedule types (run after adding a vehicle via app)
 -- These are inserted programmatically per vehicle when a new car is added.

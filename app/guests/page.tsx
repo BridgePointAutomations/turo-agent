@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import type { Guest } from '@/lib/types'
+import type { Guest, Trip } from '@/lib/types'
 
 const FLAG_CONFIG = {
   none:    { label: 'No flag',     bg: '#F1F5F9', text: '#64748B', dot: '#94A3B8' },
@@ -20,15 +20,25 @@ const TEMPLATES = {
 const inputCls = "w-full text-sm px-3 py-2 rounded-lg"
 const inputStyle = { border: '1px solid #E2E8F0', color: '#0F172A', outline: 'none', backgroundColor: 'white' }
 
+type GuestWithTrips = Guest & { trips?: Trip[] }
+
 export default function GuestsPage() {
-  const [guests, setGuests] = useState<Guest[]>([])
+  const [guests, setGuests] = useState<GuestWithTrips[]>([])
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name:'', flag:'none' as const, notes:'', turo_profile_url:'' })
+  const [form, setForm] = useState({ name: '', flag: 'none' as Guest['flag'], notes: '', turo_profile_url: '' })
   const [saving, setSaving] = useState(false)
   const [template, setTemplate] = useState<keyof typeof TEMPLATES | ''>('')
   const [copied, setCopied] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ name: '', flag: 'none' as Guest['flag'], notes: '', turo_profile_url: '' })
+  const [editSaving, setEditSaving] = useState(false)
+  const [expandedTrips, setExpandedTrips] = useState<Set<string>>(new Set())
+  const [guestTrips, setGuestTrips] = useState<Record<string, Trip[]>>({})
+  const [loadingTrips, setLoadingTrips] = useState<Set<string>>(new Set())
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
+
   async function load() {
     const data = await fetch('/api/guests').then(r => r.json())
     setGuests(Array.isArray(data) ? data : [])
@@ -36,13 +46,49 @@ export default function GuestsPage() {
 
   async function save() {
     setSaving(true)
-    await fetch('/api/guests', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(form) })
-    setSaving(false); setShowForm(false); setForm({ name:'', flag:'none', notes:'', turo_profile_url:'' }); load()
+    await fetch('/api/guests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+    setSaving(false)
+    setShowForm(false)
+    setForm({ name: '', flag: 'none', notes: '', turo_profile_url: '' })
+    load()
   }
 
   async function updateFlag(id: string, flag: Guest['flag']) {
-    await fetch('/api/guests', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id, flag }) })
+    await fetch('/api/guests', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, flag }) })
     load()
+  }
+
+  function startEdit(g: GuestWithTrips) {
+    setEditingId(g.id)
+    setEditForm({ name: g.name, flag: g.flag, notes: g.notes ?? '', turo_profile_url: g.turo_profile_url ?? '' })
+  }
+
+  async function saveEdit(id: string) {
+    setEditSaving(true)
+    await fetch('/api/guests', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...editForm }) })
+    setEditSaving(false)
+    setEditingId(null)
+    load()
+  }
+
+  async function deleteGuest(id: string) {
+    await fetch(`/api/guests?id=${id}`, { method: 'DELETE' })
+    setConfirmDelete(null)
+    load()
+  }
+
+  async function toggleTrips(guestId: string) {
+    if (expandedTrips.has(guestId)) {
+      setExpandedTrips(prev => { const s = new Set(prev); s.delete(guestId); return s })
+      return
+    }
+    setExpandedTrips(prev => new Set(prev).add(guestId))
+    if (!guestTrips[guestId]) {
+      setLoadingTrips(prev => new Set(prev).add(guestId))
+      const data = await fetch(`/api/trips?guest_id=${guestId}`).then(r => r.json())
+      setGuestTrips(prev => ({ ...prev, [guestId]: Array.isArray(data) ? data : [] }))
+      setLoadingTrips(prev => { const s = new Set(prev); s.delete(guestId); return s })
+    }
   }
 
   function copyTemplate() {
@@ -96,8 +142,7 @@ export default function GuestsPage() {
         </div>
         {template && (
           <div className="relative">
-            <textarea readOnly value={TEMPLATES[template]}
-              className="w-full text-sm p-3.5 rounded-xl resize-none"
+            <textarea readOnly value={TEMPLATES[template]} className="w-full text-sm p-3.5 rounded-xl resize-none"
               rows={5}
               style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', color: '#374151', outline: 'none' }} />
             <button onClick={copyTemplate}
@@ -109,7 +154,7 @@ export default function GuestsPage() {
         )}
       </div>
 
-      {/* Form */}
+      {/* Add form */}
       {showForm && (
         <div className="bg-white rounded-xl p-6 mb-6" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           <h2 className="text-base font-semibold mb-1" style={{ color: '#0F172A' }}>Add guest</h2>
@@ -124,7 +169,7 @@ export default function GuestsPage() {
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Flag</label>
               <select value={form.flag} onChange={e => setForm(p => ({...p, flag: e.target.value as any}))}
                 className={inputCls} style={inputStyle}>
-                {Object.entries(FLAG_CONFIG).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                {Object.entries(FLAG_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
             <div>
@@ -166,53 +211,194 @@ export default function GuestsPage() {
           <p className="text-sm" style={{ color: '#64748B' }}>Add guests to track ratings, notes, and flags</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-3">
           {guests.map(g => {
             const flagCfg = FLAG_CONFIG[g.flag] || FLAG_CONFIG.none
-            const initials = g.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()
+            const initials = g.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+            const isEditing = editingId === g.id
+            const tripsExpanded = expandedTrips.has(g.id)
+            const trips = guestTrips[g.id] ?? []
+
             return (
-              <div key={g.id} className="bg-white rounded-xl p-4" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0"
-                      style={{ backgroundColor: '#EFF6FF', color: '#2563EB' }}>
-                      {initials}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold" style={{ color: '#0F172A' }}>{g.name}</p>
-                      {g.avg_rating && (
-                        <p className="text-xs font-medium" style={{ color: '#F59E0B' }}>★ {g.avg_rating} avg rating</p>
-                      )}
+              <div key={g.id} className="bg-white rounded-xl" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                {/* Confirm delete overlay */}
+                {confirmDelete === g.id && (
+                  <div className="p-4 rounded-xl flex items-center justify-between gap-3"
+                    style={{ backgroundColor: '#FFF1F2', border: '1px solid #FECDD3' }}>
+                    <p className="text-sm font-medium" style={{ color: '#E11D48' }}>
+                      Delete {g.name}? Their linked trips will not be deleted.
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={() => deleteGuest(g.id)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                        style={{ backgroundColor: '#E11D48' }}>
+                        Delete
+                      </button>
+                      <button onClick={() => setConfirmDelete(null)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                        style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
+                        Cancel
+                      </button>
                     </div>
                   </div>
-                  <select value={g.flag} onChange={e => updateFlag(g.id, e.target.value as any)}
-                    className="text-xs px-2 py-1 rounded-lg cursor-pointer font-medium border-0"
-                    style={{ backgroundColor: flagCfg.bg, color: flagCfg.text, outline: 'none' }}>
-                    {Object.entries(FLAG_CONFIG).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select>
-                </div>
-                {g.notes && (
-                  <p className="text-xs italic mb-3 px-3 py-2 rounded-lg" style={{ color: '#64748B', backgroundColor: '#F8FAFC' }}>
-                    "{g.notes}"
-                  </p>
                 )}
-                <div className="flex items-center gap-4 text-xs pt-2" style={{ borderTop: '1px solid #F1F5F9', color: '#94A3B8' }}>
-                  {g.total_trips > 0 && (
-                    <span className="flex items-center gap-1">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M9 11l3 3L22 4"/>
-                      </svg>
-                      {g.total_trips} trip{g.total_trips !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                  {g.last_trip_date && <span>Last: {g.last_trip_date}</span>}
-                  {g.turo_profile_url && (
-                    <a href={g.turo_profile_url} target="_blank" rel="noreferrer"
-                      className="ml-auto font-medium hover:underline" style={{ color: '#1D9E75' }}>
-                      Turo profile →
-                    </a>
-                  )}
-                </div>
+
+                {confirmDelete !== g.id && (
+                  <div className="p-4">
+                    {isEditing ? (
+                      /* Edit form */
+                      <div>
+                        <p className="text-xs font-semibold mb-3" style={{ color: '#64748B' }}>EDITING GUEST</p>
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Name</label>
+                            <input type="text" value={editForm.name} onChange={e => setEditForm(p => ({...p, name: e.target.value}))}
+                              className={inputCls} style={inputStyle}/>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Flag</label>
+                            <select value={editForm.flag} onChange={e => setEditForm(p => ({...p, flag: e.target.value as any}))}
+                              className={inputCls} style={inputStyle}>
+                              {Object.entries(FLAG_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Turo profile URL</label>
+                            <input type="text" value={editForm.turo_profile_url}
+                              onChange={e => setEditForm(p => ({...p, turo_profile_url: e.target.value}))}
+                              placeholder="https://turo.com/…" className={inputCls} style={inputStyle}/>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Notes</label>
+                            <input type="text" value={editForm.notes}
+                              onChange={e => setEditForm(p => ({...p, notes: e.target.value}))}
+                              placeholder="Notes…" className={inputCls} style={inputStyle}/>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => saveEdit(g.id)} disabled={editSaving || !editForm.name}
+                            className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"
+                            style={{ backgroundColor: '#1D9E75' }}>
+                            {editSaving ? 'Saving…' : 'Save'}
+                          </button>
+                          <button onClick={() => setEditingId(null)}
+                            className="px-4 py-1.5 rounded-lg text-xs font-medium"
+                            style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Normal card view */
+                      <>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0"
+                              style={{ backgroundColor: '#EFF6FF', color: '#2563EB' }}>
+                              {initials}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold" style={{ color: '#0F172A' }}>{g.name}</p>
+                              {g.avg_rating && (
+                                <p className="text-xs font-medium" style={{ color: '#F59E0B' }}>★ {g.avg_rating} avg rating</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <select value={g.flag} onChange={e => updateFlag(g.id, e.target.value as any)}
+                              className="text-xs px-2 py-1 rounded-lg cursor-pointer font-medium border-0"
+                              style={{ backgroundColor: flagCfg.bg, color: flagCfg.text, outline: 'none' }}>
+                              {Object.entries(FLAG_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                            </select>
+                            <button onClick={() => startEdit(g)}
+                              className="p-1.5 rounded-lg hover:opacity-70"
+                              style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}
+                              title="Edit guest">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                              </svg>
+                            </button>
+                            <button onClick={() => setConfirmDelete(g.id)}
+                              className="p-1.5 rounded-lg hover:opacity-70"
+                              style={{ border: '1px solid #FECDD3', color: '#E11D48', backgroundColor: '#FFF1F2' }}
+                              title="Delete guest">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                                <path d="M10 11v6"/><path d="M14 11v6"/>
+                                <path d="M9 6V4h6v2"/>
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+
+                        {g.notes && (
+                          <p className="text-xs italic mb-3 px-3 py-2 rounded-lg" style={{ color: '#64748B', backgroundColor: '#F8FAFC' }}>
+                            "{g.notes}"
+                          </p>
+                        )}
+
+                        <div className="flex items-center gap-4 text-xs pt-2" style={{ borderTop: '1px solid #F1F5F9', color: '#94A3B8' }}>
+                          {g.total_trips > 0 && (
+                            <button onClick={() => toggleTrips(g.id)}
+                              className="flex items-center gap-1 hover:opacity-70 font-medium"
+                              style={{ color: '#1D9E75' }}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M9 11l3 3L22 4"/>
+                              </svg>
+                              {g.total_trips} trip{g.total_trips !== 1 ? 's' : ''}
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                style={{ transform: tripsExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+                                <polyline points="6 9 12 15 18 9"/>
+                              </svg>
+                            </button>
+                          )}
+                          {g.last_trip_date && <span>Last: {g.last_trip_date}</span>}
+                          {g.turo_profile_url && (
+                            <a href={g.turo_profile_url} target="_blank" rel="noreferrer"
+                              className="ml-auto font-medium hover:underline" style={{ color: '#1D9E75' }}>
+                              Turo profile →
+                            </a>
+                          )}
+                        </div>
+
+                        {/* Trip history */}
+                        {tripsExpanded && (
+                          <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F1F5F9' }}>
+                            {loadingTrips.has(g.id) ? (
+                              <p className="text-xs text-center py-2" style={{ color: '#94A3B8' }}>Loading trips…</p>
+                            ) : trips.length === 0 ? (
+                              <p className="text-xs py-2" style={{ color: '#94A3B8' }}>No trips found for this guest.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {trips.map(t => (
+                                  <div key={t.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-xs"
+                                    style={{ backgroundColor: '#F8FAFC', border: '1px solid #F1F5F9' }}>
+                                    <div style={{ color: '#64748B' }}>
+                                      <span className="font-medium" style={{ color: '#0F172A' }}>
+                                        {(t.fleet as any)?.make} {(t.fleet as any)?.model}
+                                      </span>
+                                      <span className="mx-1.5">·</span>
+                                      {t.start_date} → {t.end_date}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      {t.host_rating && (
+                                        <span style={{ color: '#F59E0B' }}>★ {t.host_rating}</span>
+                                      )}
+                                      <span className="font-semibold" style={{ color: '#1D9E75' }}>
+                                        ${Number(t.net_revenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
