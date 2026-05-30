@@ -131,7 +131,7 @@ export default function TripsPage() {
   }
 
   function addLineItem() {
-    if (!newItem.label || newItem.amount <= 0) return
+    if (!newItem.label || newItem.amount === 0) return
     const updated = [...lineItems, { ...newItem }]
     setLineItems(updated)
     setNewItem({ label: '', amount: 0, type: 'fee' })
