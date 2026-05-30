@@ -95,8 +95,8 @@ export default function DashboardPage() {
         <StatCard label="Active Vehicles" value={activeVehicles} sub={`${vehicles.length - activeVehicles} inactive`} color="blue" />
       </div>
 
-      {/* Main: 60/40 split — left column stacks data panels, right column holds Fleet Advisor */}
-      <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-5 items-start">
+      {/* Main: fluid left + fixed-width Fleet Advisor */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 items-start">
 
         {/* Left column: data panels */}
         <div className="flex flex-col gap-5">
