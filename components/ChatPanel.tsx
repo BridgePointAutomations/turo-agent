@@ -181,7 +181,7 @@ export default function ChatPanel() {
   const activeTitle = conversations.find(c => c.id === activeConvId)?.title
 
   return (
-    <div className="flex h-full bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+    <div className="flex h-full bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04)', borderTop: '2px solid #1D9E75' }}>
       {/* Sidebar */}
       {sidebarOpen && (
         <div className="w-60 flex-shrink-0 flex flex-col" style={{ borderRight: '1px solid #F1F5F9', backgroundColor: '#FAFAFA' }}>
