@@ -104,7 +104,7 @@ export default function TripsPage() {
   function calcGross() {
     const base = calcBaseRevenue()
     if (base > 0) {
-      const adj = lineItems.reduce((s, i) => i.type === 'discount' ? s - i.amount : s + i.amount, 0)
+      const adj = lineItems.reduce((s, i) => i.type === 'discount' ? s - Math.abs(i.amount) : s + i.amount, 0)
       setForm(p => ({ ...p, gross_revenue: base + adj }))
     }
   }
@@ -122,7 +122,7 @@ export default function TripsPage() {
     setLineItems(updated)
     setNewItem({ label: '', amount: 0, type: 'fee' })
     const base = calcBaseRevenue()
-    const adj = updated.reduce((s, i) => i.type === 'discount' ? s - i.amount : s + i.amount, 0)
+    const adj = updated.reduce((s, i) => i.type === 'discount' ? s - Math.abs(i.amount) : s + i.amount, 0)
     setForm(p => ({ ...p, gross_revenue: base + adj }))
   }
 
@@ -130,7 +130,7 @@ export default function TripsPage() {
     const updated = lineItems.filter((_, i) => i !== idx)
     setLineItems(updated)
     const base = calcBaseRevenue()
-    const adj = updated.reduce((s, i) => i.type === 'discount' ? s - i.amount : s + i.amount, 0)
+    const adj = updated.reduce((s, i) => i.type === 'discount' ? s - Math.abs(i.amount) : s + i.amount, 0)
     setForm(p => ({ ...p, gross_revenue: base + adj }))
   }
 
@@ -200,7 +200,7 @@ export default function TripsPage() {
   const miles = milesAdded()
 
   const baseRevenue = calcBaseRevenue()
-  const lineAdj = lineItems.reduce((s, i) => i.type === 'discount' ? s - i.amount : s + i.amount, 0)
+  const lineAdj = lineItems.reduce((s, i) => i.type === 'discount' ? s - Math.abs(i.amount) : s + i.amount, 0)
   const displayGross = baseRevenue + lineAdj
   const selectedGuest = form.guest_id ? guests.find(g => g.id === form.guest_id) : null
 
@@ -429,12 +429,12 @@ export default function TripsPage() {
                     style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
                     <span className="flex-1 font-medium" style={{ color: '#0F172A' }}>{item.label}</span>
                     <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                      style={{ backgroundColor: item.type === 'discount' ? '#FFF1F2' : '#EFF6FF', color: item.type === 'discount' ? '#E11D48' : '#2563EB' }}>
+                      style={{ backgroundColor: (item.type === 'discount' || item.amount < 0) ? '#FFF1F2' : '#EFF6FF', color: (item.type === 'discount' || item.amount < 0) ? '#E11D48' : '#2563EB' }}>
                       {LINE_ITEM_TYPES.find(t => t.value === item.type)?.label}
                     </span>
                     <span className="font-semibold w-20 text-right"
-                      style={{ color: item.type === 'discount' ? '#E11D48' : '#0F172A' }}>
-                      {item.type === 'discount' ? '−' : '+'}${item.amount.toFixed(2)}
+                      style={{ color: (item.type === 'discount' || item.amount < 0) ? '#E11D48' : '#0F172A' }}>
+                      {(item.type === 'discount' || item.amount < 0) ? '−' : '+'}${Math.abs(item.amount).toFixed(2)}
                     </span>
                     <button onClick={() => removeLineItem(idx)}
                       className="text-xs hover:opacity-70 ml-1" style={{ color: '#94A3B8' }}>×</button>
@@ -452,11 +452,11 @@ export default function TripsPage() {
                     className="text-sm px-2 py-2 rounded-lg" style={{ ...inputStyle, width: 160 }}>
                     {LINE_ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
-                  <input type="number" placeholder="Amount" min={0} step={0.01}
+                  <input type="number" placeholder="Amount" step={0.01}
                     value={newItem.amount || ''}
                     onChange={e => setNewItem(p => ({ ...p, amount: Number(e.target.value) }))}
                     className="text-sm px-3 py-2 rounded-lg" style={{ ...inputStyle, width: 100 }}/>
-                  <button onClick={addLineItem} disabled={!newItem.label || newItem.amount <= 0}
+                  <button onClick={addLineItem} disabled={!newItem.label || newItem.amount === 0}
                     className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40"
                     style={{ backgroundColor: '#1D9E75' }}>
                     Add
@@ -480,8 +480,8 @@ export default function TripsPage() {
                   {lineItems.map((item, idx) => (
                     <div key={idx} className="flex justify-between">
                       <span>{item.label}</span>
-                      <span style={{ color: item.type === 'discount' ? '#E11D48' : '#065F46' }}>
-                        {item.type === 'discount' ? '−' : '+'}${item.amount.toFixed(2)}
+                      <span style={{ color: (item.type === 'discount' || item.amount < 0) ? '#E11D48' : '#065F46' }}>
+                        {(item.type === 'discount' || item.amount < 0) ? '−' : '+'}${Math.abs(item.amount).toFixed(2)}
                       </span>
                     </div>
                   ))}

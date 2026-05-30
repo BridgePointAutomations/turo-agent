@@ -21,7 +21,7 @@ async function recalcGrossRevenue(tripId: string) {
     .eq('trip_id', tripId)
 
   const adjustments = (items ?? []).reduce((sum, item) => {
-    return item.type === 'discount' ? sum - item.amount : sum + item.amount
+    return item.type === 'discount' ? sum - Math.abs(item.amount) : sum + item.amount
   }, 0)
 
   await supabase.from('trips').update({ gross_revenue: base + adjustments }).eq('id', tripId)
