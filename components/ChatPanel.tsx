@@ -122,17 +122,61 @@ export default function ChatPanel() {
     setMessages(prev => [...prev.filter(m => m !== WELCOME || prev.length > 1), userMsg])
     setLoading(true)
 
+    // Add a placeholder assistant message that we'll fill in as tokens stream in
+    const assistantPlaceholder: ChatMessage = { role: 'assistant', content: '' }
+    setMessages(prev => [...prev, assistantPlaceholder])
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [userMsg], conversation_id: convId }),
       })
-      const data = await res.json()
-      setMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
-      loadConversations()
+
+      if (!res.body) throw new Error('No response body')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const payload = JSON.parse(line.slice(6))
+            if (payload.delta) {
+              fullContent += payload.delta
+              setMessages(prev => {
+                const updated = [...prev]
+                updated[updated.length - 1] = { role: 'assistant', content: fullContent }
+                return updated
+              })
+            } else if (payload.done) {
+              loadConversations()
+            } else if (payload.error) {
+              setMessages(prev => {
+                const updated = [...prev]
+                updated[updated.length - 1] = { role: 'assistant', content: 'Something went wrong. Please try again.' }
+                return updated
+              })
+            }
+          } catch { /* malformed SSE line — skip */ }
+        }
+      }
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Something went wrong. Please try again.' }])
+      setMessages(prev => {
+        const updated = [...prev]
+        updated[updated.length - 1] = { role: 'assistant', content: 'Something went wrong. Please try again.' }
+        return updated
+      })
     } finally {
       setLoading(false)
     }

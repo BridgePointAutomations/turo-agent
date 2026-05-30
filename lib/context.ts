@@ -11,29 +11,52 @@ try {
   turoKnowledge = '(Turo knowledge base not loaded)'
 }
 
-export async function buildFleetContext(): Promise<FleetContext> {
+// Static system prompt — role instructions + knowledge base. Never changes at runtime,
+// so it's sent as the cacheable block in the Anthropic prompt caching API.
+export const STATIC_ROLE_AND_KNOWLEDGE = `You are TuroAgent, an expert Turo car rental business advisor with full context of this host's operation.
+
+## YOUR ROLE
+You are a proactive, knowledgeable Turo business advisor. You:
+- Always reference the host's actual vehicles, rates, and data provided when giving advice
+- Give specific, actionable recommendations — not generic tips
+- Flag maintenance issues, document expiry, or profitability concerns proactively
+- Know Turo platform mechanics deeply: dynamic pricing, All-Star Host program, protection plans, fee structures, listing SEO, guest management, damage claims, tax deductions
+- Suggest ready-to-send message templates for guests when relevant
+- Think like a small business operator focused on ROI and host protection
+
+Keep responses concise and practical. Use bullet points for lists. When relevant, cite specific dollar amounts or percentages from the host's own data.
+
+## TURO PLATFORM KNOWLEDGE BASE
+${turoKnowledge}`
+
+// In-memory context cache — 60s TTL prevents redundant DB queries on rapid follow-up messages
+let cachedCtx: { data: FleetContext; ts: number } | null = null
+const CACHE_TTL_MS = 60_000
+
+async function fetchFleetContext(): Promise<FleetContext> {
   const now = new Date()
   const yearStart = `${now.getFullYear()}-01-01`
   const thirtyDaysOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
-  const [vehiclesRes, tripsRes, maintenanceRes, expensesRes, expiringDocsRes] = await Promise.all([
+  const [vehiclesRes, recentTripsRes, ytdTripsRes, maintenanceRes, expensesRes, expiringDocsRes] = await Promise.all([
     supabase.from('fleet').select('*').order('created_at'),
+    // Recent trips for display (last 10)
     supabase.from('trips').select('*, fleet(make,model,year), guests(name,flag)').order('start_date', { ascending: false }).limit(10),
+    // YTD trips — no limit, correct revenue sum regardless of trip count
+    supabase.from('trips').select('net_revenue').gte('start_date', yearStart),
     supabase.from('maintenance').select('*, fleet(make,model,year)').in('status', ['due_soon', 'overdue']),
     supabase.from('expenses').select('amount').gte('date', yearStart),
     supabase.from('vehicle_documents').select('name, document_type, expiry_date, fleet(make,model,year)')
       .not('expiry_date', 'is', null).lte('expiry_date', thirtyDaysOut),
   ])
 
-  const ytdRevenue = (tripsRes.data || [])
-    .filter(t => t.start_date >= yearStart)
+  const ytdRevenue = (ytdTripsRes.data || [])
     .reduce((sum, t) => sum + (t.net_revenue || 0), 0)
 
   const ytdExpenses = (expensesRes.data || [])
     .reduce((sum, e) => sum + (e.amount || 0), 0)
 
-  // Payout discrepancy detection
-  const recentTrips = tripsRes.data || []
+  const recentTrips = recentTripsRes.data || []
   const discrepancies = recentTrips.filter(t =>
     t.actual_payout != null && Math.abs(t.actual_payout - t.net_revenue) > 5
   )
@@ -50,7 +73,15 @@ export async function buildFleetContext(): Promise<FleetContext> {
   }
 }
 
-export function buildSystemPrompt(ctx: FleetContext): string {
+export async function buildFleetContext(): Promise<FleetContext> {
+  if (cachedCtx && Date.now() - cachedCtx.ts < CACHE_TTL_MS) return cachedCtx.data
+  const data = await fetchFleetContext()
+  cachedCtx = { data, ts: Date.now() }
+  return data
+}
+
+// Returns the dynamic fleet section only (changes every request — not cached)
+export function buildDynamicFleetSection(ctx: FleetContext): string {
   const vehicleList = ctx.vehicles.length
     ? ctx.vehicles.map(v =>
       `  - ${v.year} ${v.make} ${v.model} | $${v.daily_rate}/day | ${v.current_mileage.toLocaleString()} mi | Status: ${v.status}${v.notes ? ` | Notes: ${v.notes}` : ''}`
@@ -89,9 +120,7 @@ export function buildSystemPrompt(ctx: FleetContext): string {
 
   const netYTD = ctx.ytdRevenue - ctx.ytdExpenses
 
-  return `You are TuroAgent, an expert Turo car rental business advisor with full context of this host's operation.
-
-## HOST'S FLEET
+  return `## HOST'S FLEET
 ${vehicleList}
 
 ## RECENT TRIPS (last 5)
@@ -104,19 +133,10 @@ ${docAlerts ? `\n## DOCUMENT EXPIRY ALERTS\n${docAlerts}` : ''}
 ## FINANCIALS (YTD ${new Date().getFullYear()})
   - Gross revenue: $${ctx.ytdRevenue.toFixed(0)}
   - Expenses: $${ctx.ytdExpenses.toFixed(0)}
-  - Net profit: $${netYTD.toFixed(0)}${payoutWarnings}
+  - Net profit: $${netYTD.toFixed(0)}${payoutWarnings}`
+}
 
-## YOUR ROLE
-You are a proactive, knowledgeable Turo business advisor. You:
-- Always reference the host's actual vehicles, rates, and data above when giving advice
-- Give specific, actionable recommendations — not generic tips
-- Flag maintenance issues, document expiry, or profitability concerns proactively
-- Know Turo platform mechanics deeply: dynamic pricing, All-Star Host program, protection plans, fee structures, listing SEO, guest management, damage claims, tax deductions
-- Suggest ready-to-send message templates for guests when relevant
-- Think like a small business operator focused on ROI and host protection
-
-Keep responses concise and practical. Use bullet points for lists. When relevant, cite specific dollar amounts or percentages from the host's own data above.
-
-## TURO PLATFORM KNOWLEDGE BASE
-${turoKnowledge}`
+// Combined prompt for callers that don't use prompt caching (e.g. tests)
+export function buildSystemPrompt(ctx: FleetContext): string {
+  return `${STATIC_ROLE_AND_KNOWLEDGE}\n\n${buildDynamicFleetSection(ctx)}`
 }
