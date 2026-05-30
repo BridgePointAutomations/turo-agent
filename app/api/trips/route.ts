@@ -45,6 +45,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { line_items, ...tripData } = body
 
+  // Auto-calculate miles_added from odometer readings when both are provided
+  if (tripData.start_mileage != null && tripData.end_mileage != null) {
+    tripData.miles_added = Math.max(0, tripData.end_mileage - tripData.start_mileage)
+  }
+
   // Compute gross_revenue from base + line items if line items provided
   if (line_items && line_items.length > 0) {
     const adjustments = line_items.reduce((sum: number, item: { type: string; amount: number }) => {
@@ -68,13 +73,15 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Update vehicle mileage if miles_added provided
-  if (body.miles_added && body.vehicle_id) {
-    const { data: vehicle } = await supabase.from('fleet').select('current_mileage').eq('id', body.vehicle_id).single()
+  // Update vehicle mileage — use end_mileage directly for accuracy when available
+  if (tripData.end_mileage && tripData.vehicle_id) {
+    await supabase.from('fleet').update({ current_mileage: tripData.end_mileage }).eq('id', tripData.vehicle_id)
+  } else if (tripData.miles_added && tripData.vehicle_id) {
+    const { data: vehicle } = await supabase.from('fleet').select('current_mileage').eq('id', tripData.vehicle_id).single()
     if (vehicle) {
       await supabase.from('fleet').update({
-        current_mileage: (vehicle.current_mileage || 0) + body.miles_added
-      }).eq('id', body.vehicle_id)
+        current_mileage: (vehicle.current_mileage || 0) + tripData.miles_added
+      }).eq('id', tripData.vehicle_id)
     }
   }
 

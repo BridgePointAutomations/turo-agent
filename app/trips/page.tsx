@@ -14,6 +14,9 @@ const EMPTY_FORM = {
   guest_rating: 5,
   host_rating: 5.0,
   miles_added: 0,
+  start_mileage: '' as string | number,
+  end_mileage: '' as string | number,
+  actual_payout: '' as string | number,
   notes: '',
   status: 'completed' as const,
 }
@@ -49,6 +52,8 @@ export default function TripsPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [filter, setFilter] = useState('')
 
   // Guest combobox state
@@ -104,6 +109,13 @@ export default function TripsPage() {
     }
   }
 
+  function milesAdded() {
+    const s = Number(form.start_mileage)
+    const e = Number(form.end_mileage)
+    if (s > 0 && e > s) return e - s
+    return null
+  }
+
   function addLineItem() {
     if (!newItem.label || newItem.amount <= 0) return
     const updated = [...lineItems, { ...newItem }]
@@ -148,10 +160,30 @@ export default function TripsPage() {
 
   async function save() {
     setSaving(true)
-    const payload = {
-      ...form,
-      line_items: lineItems.length > 0 ? lineItems : undefined,
+    let receipt_url: string | undefined
+
+    if (receiptFile) {
+      setUploading(true)
+      const fd = new FormData()
+      fd.append('file', receiptFile)
+      fd.append('bucket', 'trip-receipts')
+      fd.append('folder', `trip-${Date.now()}`)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const result = await res.json()
+      if (result.url) receipt_url = result.url
+      setUploading(false)
     }
+
+    const payload: Record<string, unknown> = { ...form }
+    if (form.start_mileage !== '') payload.start_mileage = Number(form.start_mileage)
+    else delete payload.start_mileage
+    if (form.end_mileage !== '') payload.end_mileage = Number(form.end_mileage)
+    else delete payload.end_mileage
+    if (form.actual_payout !== '') payload.actual_payout = Number(form.actual_payout)
+    else delete payload.actual_payout
+    if (receipt_url) payload.receipt_url = receipt_url
+    if (lineItems.length > 0) payload.line_items = lineItems
+
     await fetch('/api/trips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     setSaving(false)
     setShowForm(false)
@@ -159,11 +191,13 @@ export default function TripsPage() {
     setGuestSearch('')
     setLineItems([])
     setShowLineItems(false)
+    setReceiptFile(null)
     load()
   }
 
   const filtered = filter ? trips.filter(t => t.vehicle_id === filter) : trips
   const totalNet = filtered.reduce((s, t) => s + Number(t.net_revenue || 0), 0)
+  const miles = milesAdded()
 
   const baseRevenue = calcBaseRevenue()
   const lineAdj = lineItems.reduce((s, i) => i.type === 'discount' ? s - i.amount : s + i.amount, 0)
@@ -220,9 +254,10 @@ export default function TripsPage() {
           )}
 
           <div className="grid grid-cols-2 gap-4">
+            {/* Vehicle */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Vehicle</label>
-              <select value={form.vehicle_id} onChange={e => setForm(p => ({...p, vehicle_id: e.target.value}))}
+              <select value={form.vehicle_id} onChange={e => setForm(p => ({ ...p, vehicle_id: e.target.value }))}
                 className={inputCls} style={inputStyle}>
                 <option value="">Select vehicle</option>
                 {vehicles.map(v => <option key={v.id} value={v.id}>{v.year} {v.make} {v.model}</option>)}
@@ -274,54 +309,74 @@ export default function TripsPage() {
               )}
             </div>
 
+            {/* Dates */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Start date</label>
               <input type="date" value={form.start_date}
-                onChange={e => setForm(p => ({...p, start_date: e.target.value}))} onBlur={calcGross}
+                onChange={e => setForm(p => ({ ...p, start_date: e.target.value }))} onBlur={calcGross}
                 className={inputCls} style={inputStyle}/>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>End date</label>
               <input type="date" value={form.end_date}
-                onChange={e => setForm(p => ({...p, end_date: e.target.value}))} onBlur={calcGross}
+                onChange={e => setForm(p => ({ ...p, end_date: e.target.value }))} onBlur={calcGross}
                 className={inputCls} style={inputStyle}/>
             </div>
+            {/* Revenue */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Daily rate ($)</label>
               <input type="number" value={form.daily_rate} onBlur={calcGross}
-                onChange={e => setForm(p => ({...p, daily_rate: Number(e.target.value)}))}
+                onChange={e => setForm(p => ({ ...p, daily_rate: Number(e.target.value) }))}
                 className={inputCls} style={inputStyle}/>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Turo fee plan</label>
-              <select value={form.turo_fee_pct} onChange={e => setForm(p => ({...p, turo_fee_pct: Number(e.target.value)}))}
+              <select value={form.turo_fee_pct} onChange={e => setForm(p => ({ ...p, turo_fee_pct: Number(e.target.value) }))}
                 className={inputCls} style={inputStyle}>
-                <option value={15}>Basic (15%)</option>
-                <option value={25}>Standard (25%)</option>
-                <option value={35}>Premium (35%)</option>
+                <option value={10}>More earnings (90% kept)</option>
+                <option value={20}>Balanced (80% kept)</option>
+                <option value={30}>More peace of mind (70% kept)</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Miles added</label>
-              <input type="number" value={form.miles_added}
-                onChange={e => setForm(p => ({...p, miles_added: Number(e.target.value)}))}
+              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Actual Turo payout received ($)</label>
+              <input type="number" placeholder="Optional — reconcile with expected" value={form.actual_payout}
+                onChange={e => setForm(p => ({ ...p, actual_payout: e.target.value }))}
+                className={inputCls} style={inputStyle}/>
+            </div>
+            {/* Odometer */}
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Start mileage (odometer)</label>
+              <input type="number" placeholder="e.g. 24500" value={form.start_mileage}
+                onChange={e => setForm(p => ({ ...p, start_mileage: e.target.value }))}
                 className={inputCls} style={inputStyle}/>
             </div>
             <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>End mileage (odometer)</label>
+              <input type="number" placeholder="e.g. 24850" value={form.end_mileage}
+                onChange={e => setForm(p => ({ ...p, end_mileage: e.target.value }))}
+                className={inputCls} style={inputStyle}/>
+              {miles !== null && (
+                <p className="text-xs mt-1" style={{ color: '#64748B' }}>{miles.toLocaleString()} miles added</p>
+              )}
+            </div>
+            {/* Ratings */}
+            <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Guest rating (1–5)</label>
               <input type="number" min={1} max={5} value={form.guest_rating}
-                onChange={e => setForm(p => ({...p, guest_rating: Number(e.target.value)}))}
+                onChange={e => setForm(p => ({ ...p, guest_rating: Number(e.target.value) }))}
                 className={inputCls} style={inputStyle}/>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Host rating received</label>
               <input type="number" min={1} max={5} step={0.1} value={form.host_rating}
-                onChange={e => setForm(p => ({...p, host_rating: Number(e.target.value)}))}
+                onChange={e => setForm(p => ({ ...p, host_rating: Number(e.target.value) }))}
                 className={inputCls} style={inputStyle}/>
             </div>
+            {/* Status */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Status</label>
-              <select value={form.status} onChange={e => setForm(p => ({...p, status: e.target.value as any}))}
+              <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value as any }))}
                 className={inputCls} style={inputStyle}>
                 <option value="completed">Completed</option>
                 <option value="upcoming">Upcoming</option>
@@ -332,8 +387,19 @@ export default function TripsPage() {
             <div className="col-span-2">
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Notes</label>
               <input type="text" placeholder="Optional notes…" value={form.notes}
-                onChange={e => setForm(p => ({...p, notes: e.target.value}))}
+                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                 className={inputCls} style={inputStyle}/>
+            </div>
+            {/* Receipt upload — full width */}
+            <div className="col-span-2">
+              <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Receipt / Document</label>
+              <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                className="w-full text-sm px-3 py-2 rounded-lg"
+                style={{ border: '1px solid #E2E8F0', color: '#374151', backgroundColor: 'white' }}/>
+              {receiptFile && (
+                <p className="text-xs mt-1" style={{ color: '#64748B' }}>{receiptFile.name} selected</p>
+              )}
             </div>
           </div>
 
@@ -440,9 +506,9 @@ export default function TripsPage() {
             <button onClick={save} disabled={saving || !form.vehicle_id || !form.guest_name || !form.start_date}
               className="px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 hover:opacity-90"
               style={{ backgroundColor: '#1D9E75' }}>
-              {saving ? 'Saving…' : 'Log trip'}
+              {saving ? (uploading ? 'Uploading receipt…' : 'Saving…') : 'Log trip'}
             </button>
-            <button onClick={() => { setShowForm(false); setLineItems([]); setGuestSearch(''); setShowLineItems(false) }}
+            <button onClick={() => { setShowForm(false); setLineItems([]); setGuestSearch(''); setShowLineItems(false); setReceiptFile(null) }}
               className="px-5 py-2 rounded-lg text-sm font-medium"
               style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
               Cancel
@@ -467,8 +533,8 @@ export default function TripsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
-                {['Guest', 'Vehicle', 'Dates', 'Net Revenue', 'Rating', 'Status'].map(h => (
-                  <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider ${h === 'Net Revenue' || h === 'Rating' ? 'text-right' : 'text-left'}`}
+                {['Guest', 'Vehicle', 'Dates', 'Net Revenue', 'Payout', 'Rating', 'Status'].map(h => (
+                  <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider ${['Net Revenue','Payout','Rating'].includes(h) ? 'text-right' : 'text-left'}`}
                     style={{ color: '#64748B', letterSpacing: '0.06em' }}>
                     {h}
                   </th>
@@ -482,6 +548,9 @@ export default function TripsPage() {
                 const sc = STATUS_CFG[t.status] || STATUS_CFG.cancelled
                 const guestFlag = (t.guests as any)?.flag
                 const hasExtras = Array.isArray((t as any).trip_line_items) && (t as any).trip_line_items.length > 0
+                const expectedNet = Number(t.net_revenue)
+                const paid = t.actual_payout != null ? Number(t.actual_payout) : null
+                const discrepancy = paid != null ? paid - expectedNet : null
                 return (
                   <tr key={t.id} className="data-table" style={{ borderBottom: '1px solid #F1F5F9' }}>
                     <td className="px-4 py-3.5 font-semibold" style={{ color: '#0F172A' }}>
@@ -492,9 +561,20 @@ export default function TripsPage() {
                           {FLAG_ICONS[guestFlag]}
                         </span>
                       )}
+                      {t.receipt_url && (
+                        <a href={t.receipt_url} target="_blank" rel="noopener noreferrer"
+                          className="ml-2 text-xs font-normal underline" style={{ color: '#1D9E75' }}>
+                          Receipt
+                        </a>
+                      )}
                     </td>
                     <td className="px-4 py-3.5" style={{ color: '#64748B' }}>
                       {(t.fleet as any)?.make} {(t.fleet as any)?.model}
+                      {t.start_mileage && t.end_mileage && (
+                        <div className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>
+                          {Number(t.start_mileage).toLocaleString()}→{Number(t.end_mileage).toLocaleString()} mi
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3.5" style={{ color: '#64748B' }}>
                       <span>{t.start_date}</span>
@@ -504,10 +584,24 @@ export default function TripsPage() {
                     </td>
                     <td className="px-4 py-3.5 text-right">
                       <span className="font-bold" style={{ color: '#1D9E75' }}>
-                        ${Number(t.net_revenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        ${expectedNet.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </span>
                       {hasExtras && (
                         <span className="ml-1.5 text-xs" title="Has line items" style={{ color: '#94A3B8' }}>+extras</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      {paid != null ? (
+                        <div>
+                          <span className="font-medium" style={{ color: '#0F172A' }}>${paid.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                          {discrepancy != null && Math.abs(discrepancy) > 5 && (
+                            <div className="text-xs mt-0.5" style={{ color: discrepancy < 0 ? '#DC2626' : '#16A34A' }}>
+                              {discrepancy > 0 ? '+' : ''}{discrepancy.toFixed(0)}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#E2E8F0' }}>—</span>
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-right">
