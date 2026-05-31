@@ -61,9 +61,9 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="p-7 max-w-7xl mx-auto">
+    <div className="p-4 md:p-7 max-w-7xl mx-auto">
       {/* Page header */}
-      <div className="flex items-start justify-between mb-7">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-7">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0F172A' }}>Dashboard</h1>
           <p className="text-sm mt-1" style={{ color: '#64748B' }}>
@@ -78,7 +78,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <a href="/fleet"
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90 self-start sm:self-auto"
           style={{ backgroundColor: '#1D9E75', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>

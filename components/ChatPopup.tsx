@@ -51,29 +51,17 @@ export default function ChatPopup() {
       {/* Popup panel */}
       {isVisible && (
         <div
-          className="fixed z-50 flex flex-col"
-          style={
+          className={`fixed z-50 flex flex-col overflow-hidden ${
             state === 'maximized'
-              ? {
-                  top: '24px',
-                  left: '24px',
-                  right: '24px',
-                  bottom: '24px',
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)',
-                }
-              : {
-                  bottom: '24px',
-                  right: '24px',
-                  width: '420px',
-                  height: '600px',
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  boxShadow: '0 20px 40px -10px rgba(0,0,0,0.25)',
-                  animation: 'slideUp 0.2s ease-out',
-                }
-          }>
+              ? 'inset-6 rounded-2xl'
+              : 'inset-0 rounded-none md:inset-auto md:bottom-6 md:right-6 md:w-[420px] md:h-[600px] md:rounded-2xl'
+          }`}
+          style={{
+            boxShadow: state === 'maximized'
+              ? '0 25px 50px -12px rgba(0,0,0,0.35)'
+              : '0 20px 40px -10px rgba(0,0,0,0.25)',
+            animation: state !== 'maximized' ? 'slideUp 0.2s ease-out' : undefined,
+          }}>
           {/* Popup chrome header */}
           <div
             className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0"
@@ -88,7 +76,7 @@ export default function ChatPopup() {
             {/* Maximize / restore */}
             <button
               onClick={() => setState(s => s === 'maximized' ? 'open' : 'maximized')}
-              className="p-1.5 rounded-md hover:opacity-70 flex-shrink-0"
+              className="p-2.5 rounded-lg hover:opacity-70 flex-shrink-0"
               title={state === 'maximized' ? 'Restore' : 'Maximize'}>
               {state === 'maximized' ? (
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -106,7 +94,7 @@ export default function ChatPopup() {
             {/* Minimize / close */}
             <button
               onClick={() => setState('closed')}
-              className="p-1.5 rounded-md hover:opacity-70 flex-shrink-0"
+              className="p-2.5 rounded-lg hover:opacity-70 flex-shrink-0"
               title="Close">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="18 15 12 21 6 15"/>

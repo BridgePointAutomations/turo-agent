@@ -1,10 +1,15 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import ChatPopup from '@/components/ChatPopup'
 
 export const metadata: Metadata = {
   title: 'TuroAgent — Fleet Management',
   description: 'Professional Turo fleet management platform',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
