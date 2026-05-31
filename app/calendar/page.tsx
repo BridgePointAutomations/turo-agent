@@ -79,15 +79,15 @@ export default function CalendarPage() {
   const todayStr = now.toISOString().slice(0, 10)
 
   return (
-    <div className="p-7 max-w-5xl mx-auto" onClick={() => setTooltip(null)}>
+    <div className="p-4 md:p-7 max-w-5xl mx-auto" onClick={() => setTooltip(null)}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-7">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-7">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0F172A' }}>Calendar</h1>
           <p className="text-sm mt-1" style={{ color: '#64748B' }}>Booking availability across your fleet</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={prevMonth} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white"
+          <button onClick={prevMonth} className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors hover:bg-white"
             style={{ border: '1px solid #E2E8F0' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6"/>
@@ -96,7 +96,7 @@ export default function CalendarPage() {
           <span className="text-base font-semibold min-w-[160px] text-center" style={{ color: '#0F172A' }}>
             {MONTHS[month]} {year}
           </span>
-          <button onClick={nextMonth} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white"
+          <button onClick={nextMonth} className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors hover:bg-white"
             style={{ border: '1px solid #E2E8F0' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6"/>
@@ -128,7 +128,7 @@ export default function CalendarPage() {
           {DAYS.map(d => (
             <div key={d} className="py-2.5 text-center text-xs font-semibold uppercase tracking-wider"
               style={{ color: '#94A3B8', letterSpacing: '0.06em' }}>
-              {d}
+              <span className="hidden sm:inline">{d}</span><span className="sm:hidden">{d[0]}</span>
             </div>
           ))}
         </div>
@@ -138,13 +138,13 @@ export default function CalendarPage() {
           <div key={w} className="grid grid-cols-7" style={{ borderBottom: w < cells.length / 7 - 1 ? '1px solid #F1F5F9' : 'none' }}>
             {cells.slice(w * 7, w * 7 + 7).map((day, i) => {
               if (!day) return (
-                <div key={i} className="min-h-[80px] p-2" style={{ backgroundColor: '#FAFAFA', borderRight: i < 6 ? '1px solid #F1F5F9' : 'none' }}/>
+                <div key={i} className="min-h-[56px] md:min-h-[80px] p-2" style={{ backgroundColor: '#FAFAFA', borderRight: i < 6 ? '1px solid #F1F5F9' : 'none' }}/>
               )
               const ds = dateStr(year, month, day)
               const isToday = ds === todayStr
               const tripsToday = dayTrips[ds] || []
               return (
-                <div key={i} className="min-h-[80px] p-2 relative"
+                <div key={i} className="min-h-[56px] md:min-h-[80px] p-2 relative"
                   style={{ borderRight: i < 6 ? '1px solid #F1F5F9' : 'none', backgroundColor: isToday ? '#F0FDF4' : 'white' }}>
                   <span className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'text-white' : ''}`}
                     style={{ backgroundColor: isToday ? '#1D9E75' : 'transparent', color: isToday ? 'white' : '#374151' }}>
@@ -182,7 +182,7 @@ export default function CalendarPage() {
             onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-3">
               <h3 className="font-semibold text-base" style={{ color: '#0F172A' }}>{tooltip.trip.guest_name}</h3>
-              <button onClick={() => setTooltip(null)} className="text-gray-400 hover:text-gray-600 ml-2">
+              <button onClick={() => setTooltip(null)} className="p-2 text-gray-400 hover:text-gray-600 ml-2">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>

@@ -139,9 +139,9 @@ export default function GuestsPage() {
   )
 
   return (
-    <div className="p-7 max-w-5xl mx-auto">
+    <div className="p-4 md:p-7 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-7">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-7">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0F172A' }}>Guests</h1>
           <p className="text-sm mt-1" style={{ color: '#64748B' }}>
@@ -151,7 +151,7 @@ export default function GuestsPage() {
           </p>
         </div>
         <button onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
           style={{ backgroundColor: '#1D9E75', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -162,7 +162,7 @@ export default function GuestsPage() {
 
       {/* Search + flag filter */}
       {guests.length > 0 && (
-        <div className="flex gap-2 mb-5">
+        <div className="flex gap-2 mb-5 flex-wrap">
           <div className="relative flex-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -260,7 +260,7 @@ export default function GuestsPage() {
         <div className="bg-white rounded-xl p-6 mb-6" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           <h2 className="text-base font-semibold mb-1" style={{ color: '#0F172A' }}>Add guest</h2>
           <p className="text-sm mb-5" style={{ color: '#64748B' }}>Track this guest for future trips</p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Guest name</label>
               <input type="text" value={form.name} onChange={e => setForm(p => ({...p, name: e.target.value}))}
@@ -357,7 +357,7 @@ export default function GuestsPage() {
                     {isEditing ? (
                       <div>
                         <p className="text-xs font-semibold mb-3" style={{ color: '#64748B' }}>EDITING GUEST</p>
-                        <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                           <div>
                             <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Name</label>
                             <input type="text" value={editForm.name} onChange={e => setEditForm(p => ({...p, name: e.target.value}))}
@@ -399,7 +399,7 @@ export default function GuestsPage() {
                     ) : (
                       <>
                         {/* Main row */}
-                        <div className="flex items-start justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="flex items-start gap-3">
                             <div className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0"
                               style={{ backgroundColor: '#EFF6FF', color: '#2563EB' }}>

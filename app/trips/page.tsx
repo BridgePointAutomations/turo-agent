@@ -281,16 +281,16 @@ export default function TripsPage() {
   const selectedGuest = form.guest_id ? guests.find(g => g.id === form.guest_id) : null
 
   return (
-    <div className="p-7 max-w-5xl mx-auto">
+    <div className="p-4 md:p-7 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-7">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-7">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0F172A' }}>Trips</h1>
           <p className="text-sm mt-1" style={{ color: '#64748B' }}>
             {filtered.length} trip{filtered.length !== 1 ? 's' : ''} · <span style={{ color: '#1D9E75', fontWeight: 600 }}>${totalNet.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span> net revenue
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-end">
           {vehicles.length > 1 && (
             <select value={filter} onChange={e => setFilter(e.target.value)}
               className="text-sm px-3 py-2 rounded-lg" style={inputStyle}>
@@ -299,7 +299,7 @@ export default function TripsPage() {
             </select>
           )}
           <button onClick={() => { setForm(EMPTY_FORM); setEditing(null); setConfirmDelete(null); setGuestSearch(''); setLineItems([]); setShowLineItems(false); setShowForm(true) }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
             style={{ backgroundColor: '#1D9E75', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -331,7 +331,7 @@ export default function TripsPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Vehicle */}
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Vehicle</label>
@@ -520,7 +520,7 @@ export default function TripsPage() {
                 ))}
 
                 {/* Add item row */}
-                <div className="flex gap-2 mt-2">
+                <div className="flex flex-wrap gap-2 mt-2">
                   <input type="text" placeholder="Label (e.g. Delivery fee)"
                     value={newItem.label}
                     onChange={e => setNewItem(p => ({ ...p, label: e.target.value }))}
@@ -628,7 +628,8 @@ export default function TripsPage() {
           <p className="text-sm" style={{ color: '#64748B' }}>Log your first trip to start tracking revenue</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+        <div className="bg-white rounded-xl" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
@@ -730,6 +731,7 @@ export default function TripsPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

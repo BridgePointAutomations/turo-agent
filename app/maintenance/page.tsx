@@ -118,9 +118,9 @@ export default function MaintenancePage() {
   ]
 
   return (
-    <div className="p-7 max-w-5xl mx-auto">
+    <div className="p-4 md:p-7 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-7">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-7">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0F172A' }}>Maintenance</h1>
           <p className="text-sm mt-1" style={{ color: alertCount > 0 ? '#DC2626' : '#64748B' }}>
@@ -130,7 +130,7 @@ export default function MaintenancePage() {
           </p>
         </div>
         <button onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
           style={{ backgroundColor: '#1D9E75', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -163,7 +163,7 @@ export default function MaintenancePage() {
         <div className="bg-white rounded-xl p-6 mb-6" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
           <h2 className="text-base font-semibold mb-1" style={{ color: '#0F172A' }}>Add service item</h2>
           <p className="text-sm mb-5" style={{ color: '#64748B' }}>Track a recurring maintenance task</p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Vehicle</label>
               <select value={form.vehicle_id} onChange={e => setForm(p => ({...p, vehicle_id: e.target.value}))}
@@ -305,7 +305,7 @@ export default function MaintenancePage() {
                       </button>
                     )}
                     <button onClick={() => startEdit(item)}
-                      className="p-1.5 rounded-lg hover:opacity-70"
+                      className="p-2 rounded-lg hover:opacity-70"
                       style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}
                       title="Edit">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -314,7 +314,7 @@ export default function MaintenancePage() {
                       </svg>
                     </button>
                     <button onClick={() => setConfirmDelete(item.id)}
-                      className="p-1.5 rounded-lg hover:opacity-70"
+                      className="p-2 rounded-lg hover:opacity-70"
                       style={{ border: '1px solid #FECDD3', color: '#E11D48', backgroundColor: '#FFF1F2' }}
                       title="Delete">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -330,7 +330,7 @@ export default function MaintenancePage() {
               {isEditing && (
                 <div className="p-5">
                   <p className="text-xs font-semibold mb-3" style={{ color: '#64748B' }}>EDITING: {item.service_type}</p>
-                  <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-3">
                     <div>
                       <label className="block text-xs font-medium mb-1" style={{ color: '#374151' }}>Service type</label>
                       <input type="text" value={editForm.service_type ?? ''} onChange={e => setEditForm(p => ({...p, service_type: e.target.value}))}
