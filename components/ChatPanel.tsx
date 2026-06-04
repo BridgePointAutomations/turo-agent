@@ -1,5 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { ChatMessage, Conversation } from '@/lib/types'
 
 const QUICK_PROMPTS = [
@@ -9,18 +11,31 @@ const QUICK_PROMPTS = [
   'Are there any gaps in my booking calendar this month?',
 ]
 
-function formatMessage(text: string) {
-  const lines = text.split('\n')
-  return lines.map((line, i) => {
-    if (line.startsWith('## ') || line.startsWith('### '))
-      return <p key={i} className="font-semibold text-sm mt-2 mb-0.5" style={{ color: '#0F172A' }}>{line.replace(/^#{2,3} /, '')}</p>
-    if (line.startsWith('**') && line.endsWith('**'))
-      return <p key={i} className="font-semibold text-sm">{line.slice(2, -2)}</p>
-    if (line.startsWith('- ') || line.startsWith('• '))
-      return <li key={i} className="ml-4 text-sm list-disc leading-relaxed">{line.slice(2)}</li>
-    if (line.trim() === '') return <br key={i} />
-    return <p key={i} className="text-sm leading-relaxed">{line}</p>
-  })
+const mdComponents: React.ComponentProps<typeof ReactMarkdown>['components'] = {
+  p: ({ children }) => <p className="text-sm leading-relaxed mb-2 last:mb-0">{children}</p>,
+  h2: ({ children }) => <p className="text-sm font-semibold mt-3 mb-1" style={{ color: '#0F172A' }}>{children}</p>,
+  h3: ({ children }) => <p className="text-sm font-semibold mt-2 mb-0.5" style={{ color: '#0F172A' }}>{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold" style={{ color: '#0F172A' }}>{children}</strong>,
+  ul: ({ children }) => <ul className="my-1.5 space-y-0.5 pl-4 list-disc marker:text-green-500">{children}</ul>,
+  ol: ({ children }) => <ol className="my-1.5 space-y-1 pl-4 list-decimal marker:text-green-600 marker:font-medium">{children}</ol>,
+  li: ({ children }) => <li className="text-sm leading-relaxed pl-0.5">{children}</li>,
+  table: ({ children }) => (
+    <div className="my-3 overflow-x-auto rounded-lg" style={{ border: '1px solid #E2E8F0' }}>
+      <table className="w-full text-xs border-collapse">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead style={{ backgroundColor: '#F0FDF4' }}>{children}</thead>,
+  th: ({ children }) => (
+    <th className="px-3 py-2 text-left font-semibold" style={{ color: '#166534', borderBottom: '1px solid #E2E8F0' }}>{children}</th>
+  ),
+  tbody: ({ children }) => <tbody>{children}</tbody>,
+  tr: ({ children }) => <tr className="border-b last:border-0" style={{ borderColor: '#F1F5F9' }}>{children}</tr>,
+  td: ({ children }) => <td className="px-3 py-2 text-sm" style={{ color: '#1E293B' }}>{children}</td>,
+  code: ({ children }) => <code className="px-1 py-0.5 rounded text-xs font-mono" style={{ backgroundColor: '#F1F5F9', color: '#0F172A' }}>{children}</code>,
+  blockquote: ({ children }) => (
+    <blockquote className="pl-3 my-2 text-sm italic" style={{ borderLeft: '3px solid #1D9E75', color: '#64748B' }}>{children}</blockquote>
+  ),
+  hr: () => <hr className="my-3" style={{ borderColor: '#E2E8F0' }} />,
 }
 
 function timeAgo(dateStr: string) {
@@ -303,7 +318,11 @@ export default function ChatPanel({ pendingPrompt, onPromptConsumed }: ChatPanel
                 : { backgroundColor: 'white', color: '#1E293B', border: '1px solid #E2E8F0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }
               }>
                 {msg.role === 'assistant' ? (
-                  <div className="space-y-0.5">{formatMessage(msg.content)}</div>
+                  <div className="min-w-0">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                 ) : (
                   <p>{msg.content}</p>
                 )}

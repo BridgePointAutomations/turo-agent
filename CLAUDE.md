@@ -10,6 +10,7 @@ TuroAgent is a Next.js 14 fleet management dashboard for Turo car-sharing hosts.
 - **Database**: Supabase (PostgreSQL) via `@supabase/supabase-js`
 - **AI**: Anthropic SDK (`claude-sonnet-4-6` for chat, `claude-haiku-4-5` for tips)
 - **Styling**: Tailwind CSS + inline CSS custom properties (no component library)
+- **Markdown rendering**: `react-markdown` + `remark-gfm` (chat responses only)
 - **Language**: TypeScript (strict)
 
 ## Commands
@@ -82,6 +83,8 @@ The chat route (`app/api/chat/route.ts`) streams SSE. Each `data:` line is a JSO
 
 The system prompt is built in `lib/context.ts` via `buildSystemPrompt(ctx)` which concatenates the static role/knowledge base with a live fleet snapshot from Supabase.
 
+Chat responses render via `react-markdown` + `remark-gfm` in `ChatPanel.tsx`, with fully custom component overrides (`mdComponents`) for all markdown elements — tables, ordered/unordered lists, inline bold, blockquotes, code, headers, and horizontal rules. Do not revert to a hand-rolled line splitter; the renderer handles full GFM including pipe tables.
+
 ### AI Tips
 `app/api/tips/route.ts` uses `claude-haiku-4-5` to generate 4 personalized tips as a JSON array. Tips are grounded in actual fleet data (vehicle names, revenue numbers, maintenance alerts). The frontend (`AITipsPanel.tsx`) caches by fleet fingerprint (`date:vehicleCount:tripCount:alertCount`) so tips auto-refresh when fleet state changes.
 
@@ -128,3 +131,4 @@ Supabase Storage buckets used: `vehicle-docs`, `trip-receipts`, `expense-receipt
 - Do not add `inputCls`/`inputStyle` as local constants in page files — import from `@/lib/ui`
 - Do not reimplement confirm-delete UX inline — use `<ConfirmDelete />` from `@/components/ConfirmDelete`
 - Do not create a new AppShell wrapper — the shell layout is inlined directly in each section's `layout.tsx`
+- Do not replace `react-markdown` in `ChatPanel.tsx` with a hand-rolled line parser — the GFM renderer handles tables, inline bold, numbered lists, and blockquotes that a naive splitter cannot
