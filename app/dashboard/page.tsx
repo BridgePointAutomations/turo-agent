@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [maintenance, setMaintenance] = useState<MaintenanceItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [hoveredBar, setHoveredBar] = useState<number | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -116,21 +117,39 @@ export default function DashboardPage() {
               )}
             </div>
             <div className="flex items-end gap-2" style={{ height: '120px' }}>
-              {last6Months.map((m, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-                  <div
-                    className="w-full rounded-t-md transition-all duration-300"
-                    style={{
-                      height: `${Math.max((m.revenue / maxRev) * 100, 3)}%`,
-                      background: i === 5 ? 'linear-gradient(180deg, #1D9E75 0%, #0F6E56 100%)' : '#DCFCE7',
-                    }}
-                  />
-                  <span className="text-xs font-medium" style={{ color: i === 5 ? '#0F172A' : '#94A3B8' }}>{m.month}</span>
-                  {m.revenue > 0 && (
-                    <span className="text-xs font-semibold" style={{ color: '#1D9E75' }}>${m.revenue >= 1000 ? (m.revenue/1000).toFixed(1)+'k' : m.revenue}</span>
-                  )}
-                </div>
-              ))}
+              {last6Months.map((m, i) => {
+                const isHovered = hoveredBar === i
+                const isCurrent = i === 5
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1.5 relative"
+                    onMouseEnter={() => setHoveredBar(i)}
+                    onMouseLeave={() => setHoveredBar(null)}>
+                    {/* Tooltip */}
+                    {isHovered && m.revenue > 0 && (
+                      <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 z-10 px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap pointer-events-none"
+                        style={{ backgroundColor: '#0F172A', color: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                        ${m.revenue >= 1000 ? (m.revenue/1000).toFixed(1)+'k' : m.revenue}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0"
+                          style={{ borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid #0F172A' }}/>
+                      </div>
+                    )}
+                    <div
+                      className="w-full rounded-t-md transition-all duration-300"
+                      style={{
+                        height: `${Math.max((m.revenue / maxRev) * 100, 3)}%`,
+                        background: isCurrent
+                          ? 'linear-gradient(180deg, #1D9E75 0%, #0F6E56 100%)'
+                          : isHovered ? '#86EFAC' : '#DCFCE7',
+                        cursor: m.revenue > 0 ? 'default' : 'default',
+                      }}
+                    />
+                    <span className="text-xs font-medium" style={{ color: isCurrent ? '#0F172A' : '#94A3B8' }}>{m.month}</span>
+                    {m.revenue > 0 && (
+                      <span className="text-xs font-semibold" style={{ color: '#1D9E75' }}>${m.revenue >= 1000 ? (m.revenue/1000).toFixed(1)+'k' : m.revenue}</span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
             {ytdTrips.length === 0 && (
               <p className="text-xs text-center mt-4" style={{ color: '#94A3B8' }}>Log trips to see your revenue trend</p>

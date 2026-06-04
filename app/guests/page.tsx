@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import type { Guest, Trip } from '@/lib/types'
+import { inputCls, inputStyle } from '@/lib/ui'
+import ConfirmDelete from '@/components/ConfirmDelete'
 
 const FLAG_CONFIG = {
   none:    { label: 'No flag',     bg: '#F1F5F9', text: '#64748B', dot: '#94A3B8' },
@@ -16,9 +18,6 @@ const TEMPLATES = {
   review_request: `Thanks so much for choosing my [Car] — it was great having you as a guest! If you have a moment, I'd really appreciate a review. I'll be leaving one for you as well. Hope to host you again!`,
   pickup_reminder: `Hi [Guest Name]! Your trip starts tomorrow. Quick reminder:\n\n📍 Pickup: [Address]\n⏰ Time: [Time]\n🔑 [Access instructions]\n\nSee you then!`,
 }
-
-const inputCls = "w-full text-sm px-3 py-2 rounded-lg"
-const inputStyle = { border: '1px solid #E2E8F0', color: '#0F172A', outline: 'none', backgroundColor: 'white' }
 
 type GuestWithTrips = Guest & { trips?: Trip[] }
 
@@ -138,6 +137,11 @@ export default function GuestsPage() {
     TEMPLATES[template].includes('[Guest Name]') || TEMPLATES[template].includes('[Car]')
   )
 
+  // Find placeholders that weren't auto-filled (e.g. [Address], [Phone], [Time])
+  const remainingPlaceholders = filledText
+    ? Array.from(filledText.matchAll(/\[([^\]]+)\]/g)).map(m => m[1])
+    : []
+
   return (
     <div className="p-4 md:p-7 max-w-5xl mx-auto">
       {/* Header */}
@@ -241,10 +245,28 @@ export default function GuestsPage() {
                 )}
               </div>
             )}
+            {remainingPlaceholders.length > 0 && (
+              <div className="mb-2.5 px-3 py-2 rounded-lg flex items-start gap-2"
+                style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <p className="text-xs" style={{ color: '#92400E' }}>
+                  <span className="font-semibold">Fill in before sending: </span>
+                  {remainingPlaceholders.map((p, i) => (
+                    <span key={i}>
+                      <code className="px-1 py-0.5 rounded font-mono text-xs mx-0.5" style={{ backgroundColor: '#FEF3C7', color: '#B45309' }}>[{p}]</code>
+                      {i < remainingPlaceholders.length - 1 ? ' ' : ''}
+                    </span>
+                  ))}
+                </p>
+              </div>
+            )}
             <div className="relative">
               <textarea readOnly value={filledText} className="w-full text-sm p-3.5 rounded-lg resize-none"
                 rows={5}
-                style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', color: '#374151', outline: 'none' }} />
+                style={{ backgroundColor: '#F8FAFC', border: `1px solid ${remainingPlaceholders.length > 0 ? '#FDE68A' : '#E2E8F0'}`, color: '#374151', outline: 'none' }} />
               <button onClick={copyTemplate}
                 className="absolute top-2.5 right-2.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
                 style={{ border: '1px solid #E2E8F0', color: copied ? '#16A34A' : '#64748B', backgroundColor: copied ? '#F0FDF4' : 'white' }}>
@@ -337,18 +359,11 @@ export default function GuestsPage() {
                     <p className="text-sm font-medium" style={{ color: '#E11D48' }}>
                       Delete {g.name}? Their linked trips will not be deleted.
                     </p>
-                    <div className="flex gap-2">
-                      <button onClick={() => deleteGuest(g.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
-                        style={{ backgroundColor: '#E11D48' }}>
-                        Delete
-                      </button>
-                      <button onClick={() => setConfirmDelete(null)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                        style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
-                        Cancel
-                      </button>
-                    </div>
+                    <ConfirmDelete
+                      label=""
+                      onConfirm={() => deleteGuest(g.id)}
+                      onCancel={() => setConfirmDelete(null)}
+                    />
                   </div>
                 )}
 

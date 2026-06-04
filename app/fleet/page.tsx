@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import type { Vehicle, VehicleDocument, DocumentType, Trip } from '@/lib/types'
+import { inputCls, inputStyle } from '@/lib/ui'
+import ConfirmDelete from '@/components/ConfirmDelete'
 
 const DOC_TYPES: DocumentType[] = ['insurance', 'registration', 'title', 'inspection', 'other']
 const DOC_CFG: Record<DocumentType, { bg: string; text: string }> = {
@@ -13,8 +15,7 @@ const DOC_CFG: Record<DocumentType, { bg: string; text: string }> = {
 
 const EMPTY: Partial<Vehicle> = { make:'', model:'', year: new Date().getFullYear(), color:'', daily_rate:65, current_mileage:0, status:'active', notes:'' }
 
-const inputCls = "w-full text-sm px-3 py-2 rounded-lg transition-all"
-const inputStyle = { border: '1px solid #E2E8F0', color: '#0F172A', outline: 'none', backgroundColor: 'white' }
+
 
 const STATUS_CFG: Record<string, { bg: string; text: string; label: string }> = {
   active:      { bg: '#F0FDF4', text: '#16A34A', label: 'Active' },
@@ -299,18 +300,12 @@ export default function FleetPage() {
             </button>
             {editing && (
               confirmDelete === editing ? (
-                <div className="ml-auto flex items-center gap-2">
-                  <span className="text-xs" style={{ color: '#64748B' }}>Delete this vehicle?</span>
-                  <button onClick={() => remove(editing)}
-                    className="text-xs px-2.5 py-1 rounded-md font-medium text-white"
-                    style={{ backgroundColor: '#DC2626' }}>
-                    Confirm
-                  </button>
-                  <button onClick={() => setConfirmDelete(null)}
-                    className="text-xs px-2.5 py-1 rounded-md font-medium"
-                    style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
-                    Cancel
-                  </button>
+                <div className="ml-auto">
+                  <ConfirmDelete
+                    label="Delete this vehicle?"
+                    onConfirm={() => remove(editing)}
+                    onCancel={() => setConfirmDelete(null)}
+                  />
                 </div>
               ) : (
                 <button onClick={() => setConfirmDelete(editing)}
@@ -474,17 +469,12 @@ export default function FleetPage() {
                                 )}
                               </div>
                               {confirmDeleteDoc === d.id ? (
-                                <div className="flex items-center gap-1 flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
-                                  <button onClick={() => removeDoc(d)}
-                                    className="text-xs px-1.5 py-0.5 rounded font-medium text-white"
-                                    style={{ backgroundColor: '#DC2626' }}>
-                                    Delete
-                                  </button>
-                                  <button onClick={() => setConfirmDeleteDoc(null)}
-                                    className="text-xs px-1.5 py-0.5 rounded font-medium"
-                                    style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
-                                    No
-                                  </button>
+                                <div className="flex-shrink-0 ml-2" onClick={e => e.stopPropagation()}>
+                                  <ConfirmDelete
+                                    label="Delete?"
+                                    onConfirm={() => removeDoc(d)}
+                                    onCancel={() => setConfirmDeleteDoc(null)}
+                                  />
                                 </div>
                               ) : (
                                 <button onClick={() => setConfirmDeleteDoc(d.id)} className="flex-shrink-0 ml-2 p-1 rounded hover:bg-red-50">

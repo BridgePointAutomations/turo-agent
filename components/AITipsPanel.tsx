@@ -9,13 +9,11 @@ interface Tip {
 }
 
 const TODAY = new Date().toISOString().slice(0, 10)
-const CACHE_DATE_KEY = 'turo_tips_date'
-const CACHE_DATA_KEY = 'turo_tips_data'
+const CACHE_KEY = 'turo_tips_v2'
 
 const CATEGORY_META: Record<string, { bg: string; color: string; icon: React.ReactNode }> = {
   pricing: {
-    bg: '#EFF6FF',
-    color: '#2563EB',
+    bg: '#EFF6FF', color: '#2563EB',
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
@@ -23,8 +21,7 @@ const CATEGORY_META: Record<string, { bg: string; color: string; icon: React.Rea
     ),
   },
   maintenance: {
-    bg: '#FFF7ED',
-    color: '#EA580C',
+    bg: '#FFF7ED', color: '#EA580C',
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
@@ -32,8 +29,7 @@ const CATEGORY_META: Record<string, { bg: string; color: string; icon: React.Rea
     ),
   },
   tax: {
-    bg: '#F0FDF4',
-    color: '#16A34A',
+    bg: '#F0FDF4', color: '#16A34A',
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
@@ -42,8 +38,7 @@ const CATEGORY_META: Record<string, { bg: string; color: string; icon: React.Rea
     ),
   },
   bookings: {
-    bg: '#FAF5FF',
-    color: '#7C3AED',
+    bg: '#FAF5FF', color: '#7C3AED',
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/>
@@ -57,6 +52,24 @@ function openChat(prompt: string) {
   window.dispatchEvent(new CustomEvent('open-chat', { detail: { prompt } }))
 }
 
+// Fleet fingerprint: vehicle count + trip count + maintenance alert count
+// Refreshes tips when fleet state changes meaningfully during the day
+async function getFleetFingerprint(): Promise<string> {
+  try {
+    const [v, t, m] = await Promise.all([
+      fetch('/api/fleet').then(r => r.json()),
+      fetch('/api/trips').then(r => r.json()),
+      fetch('/api/maintenance').then(r => r.json()),
+    ])
+    const vCount = Array.isArray(v) ? v.length : 0
+    const tCount = Array.isArray(t) ? t.length : 0
+    const mAlerts = Array.isArray(m) ? m.filter((i: any) => i.status === 'overdue' || i.status === 'due_soon').length : 0
+    return `${TODAY}:${vCount}:${tCount}:${mAlerts}`
+  } catch {
+    return TODAY
+  }
+}
+
 export default function AITipsPanel() {
   const [tips, setTips] = useState<Tip[]>([])
   const [loading, setLoading] = useState(true)
@@ -68,24 +81,41 @@ export default function AITipsPanel() {
 
     if (!force) {
       try {
-        const cachedDate = localStorage.getItem(CACHE_DATE_KEY)
-        const cachedData = localStorage.getItem(CACHE_DATA_KEY)
-        if (cachedDate === TODAY && cachedData) {
-          setTips(JSON.parse(cachedData))
-          setLoading(false)
-          return
+        const fingerprint = await getFleetFingerprint()
+        const cached = localStorage.getItem(CACHE_KEY)
+        if (cached) {
+          const { fp, data } = JSON.parse(cached)
+          if (fp === fingerprint && Array.isArray(data) && data.length > 0) {
+            setTips(data)
+            setLoading(false)
+            return
+          }
         }
-      } catch { /* ignore localStorage errors */ }
+        // Cache miss — fetch and store with current fingerprint
+        const res = await fetch('/api/tips')
+        if (!res.ok) throw new Error('Failed')
+        const data: Tip[] = await res.json()
+        setTips(data)
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ fp: fingerprint, data }))
+        } catch { /* ignore */ }
+      } catch {
+        setError(true)
+      } finally {
+        setLoading(false)
+      }
+      return
     }
 
+    // Force refresh
     try {
       const res = await fetch('/api/tips')
       if (!res.ok) throw new Error('Failed')
       const data: Tip[] = await res.json()
       setTips(data)
       try {
-        localStorage.setItem(CACHE_DATE_KEY, TODAY)
-        localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data))
+        const fingerprint = await getFleetFingerprint()
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ fp: fingerprint, data }))
       } catch { /* ignore */ }
     } catch {
       setError(true)
@@ -102,7 +132,7 @@ export default function AITipsPanel() {
       <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F1F5F9' }}>
         <div>
           <h2 className="text-sm font-semibold" style={{ color: '#0F172A' }}>AI Recommendations</h2>
-          <p className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>Updated daily for your fleet</p>
+          <p className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>Personalized insights from your fleet data</p>
         </div>
         <button
           onClick={() => fetchTips(true)}

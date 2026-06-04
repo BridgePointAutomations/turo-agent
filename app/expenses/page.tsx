@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import type { Expense, Vehicle } from '@/lib/types'
+import { inputCls, inputStyle } from '@/lib/ui'
+import ConfirmDelete from '@/components/ConfirmDelete'
 
 const CATS = ['maintenance','insurance','fuel','cleaning','registration','parking','other'] as const
 
@@ -15,14 +17,12 @@ const CAT_CFG: Record<string, { bg: string; text: string; bar: string }> = {
 }
 
 const EMPTY = { vehicle_id:'', date: new Date().toISOString().slice(0,10), category:'maintenance' as const, description:'', amount:0, notes:'' }
-const inputCls = "w-full text-sm px-3 py-2 rounded-lg"
-const inputStyle = { border: '1px solid #E2E8F0', color: '#0F172A', outline: 'none', backgroundColor: 'white' }
-
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY)
+  const [editing, setEditing] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -35,6 +35,27 @@ export default function ExpensesPage() {
     const [e, v] = await Promise.all([fetch('/api/expenses').then(r => r.json()), fetch('/api/fleet').then(r => r.json())])
     setExpenses(Array.isArray(e) ? e : [])
     setVehicles(Array.isArray(v) ? v : [])
+  }
+
+  function startEdit(e: Expense) {
+    setForm({
+      vehicle_id: e.vehicle_id ?? '',
+      date: e.date,
+      category: e.category as typeof EMPTY['category'],
+      description: e.description,
+      amount: Number(e.amount),
+      notes: e.notes ?? '',
+    })
+    setEditing(e.id)
+    setReceiptFile(null)
+    setShowForm(true)
+  }
+
+  function cancelForm() {
+    setShowForm(false)
+    setEditing(null)
+    setForm(EMPTY)
+    setReceiptFile(null)
   }
 
   async function save() {
@@ -53,12 +74,25 @@ export default function ExpensesPage() {
       setUploading(false)
     }
 
-    await fetch('/api/expenses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, ...(receipt_url ? { receipt_url } : {}) }),
-    })
-    setSaving(false); setShowForm(false); setForm(EMPTY); setReceiptFile(null); load()
+    const payload = { ...form, ...(receipt_url ? { receipt_url } : {}) }
+
+    if (editing) {
+      await fetch('/api/expenses', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editing, ...payload }),
+      })
+    } else {
+      await fetch('/api/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+    }
+
+    setSaving(false)
+    cancelForm()
+    load()
   }
 
   async function remove(id: string) {
@@ -98,7 +132,7 @@ export default function ExpensesPage() {
               {vehicles.map(v => <option key={v.id} value={v.id}>{v.year} {v.make} {v.model}</option>)}
             </select>
           )}
-          <button onClick={() => setShowForm(true)}
+          <button onClick={() => { setForm(EMPTY); setEditing(null); setShowForm(true) }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
             style={{ backgroundColor: '#1D9E75', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -127,11 +161,15 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* Form */}
+      {/* Add / Edit form */}
       {showForm && (
         <div className="bg-white rounded-xl p-6 mb-6" style={{ border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-          <h2 className="text-base font-semibold mb-1" style={{ color: '#0F172A' }}>Add expense</h2>
-          <p className="text-sm mb-5" style={{ color: '#64748B' }}>Log a business expense for your fleet</p>
+          <h2 className="text-base font-semibold mb-1" style={{ color: '#0F172A' }}>
+            {editing ? 'Edit expense' : 'Add expense'}
+          </h2>
+          <p className="text-sm mb-5" style={{ color: '#64748B' }}>
+            {editing ? 'Update the details for this expense' : 'Log a business expense for your fleet'}
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: '#374151' }}>Vehicle</label>
@@ -176,17 +214,34 @@ export default function ExpensesPage() {
               )}
             </div>
           </div>
-          <div className="flex gap-2 mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
+          <div className="flex items-center gap-2 mt-5 pt-5" style={{ borderTop: '1px solid #F1F5F9' }}>
             <button onClick={save} disabled={saving || !form.vehicle_id || !form.description || !form.amount}
               className="px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 hover:opacity-90"
               style={{ backgroundColor: '#1D9E75' }}>
-              {saving ? (uploading ? 'Uploading receipt…' : 'Saving…') : 'Add expense'}
+              {saving ? (uploading ? 'Uploading receipt…' : 'Saving…') : editing ? 'Save changes' : 'Add expense'}
             </button>
-            <button onClick={() => { setShowForm(false); setReceiptFile(null) }}
+            <button onClick={cancelForm}
               className="px-5 py-2 rounded-lg text-sm font-medium"
               style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
               Cancel
             </button>
+            {editing && (
+              confirmDelete === editing ? (
+                <div className="ml-auto">
+                  <ConfirmDelete
+                    label="Delete this expense?"
+                    onConfirm={() => remove(editing)}
+                    onCancel={() => setConfirmDelete(null)}
+                  />
+                </div>
+              ) : (
+                <button onClick={() => setConfirmDelete(editing)}
+                  className="ml-auto text-xs font-medium transition-colors hover:underline"
+                  style={{ color: '#DC2626' }}>
+                  Delete expense
+                </button>
+              )
+            )}
           </div>
         </div>
       )}
@@ -219,8 +274,9 @@ export default function ExpensesPage() {
             <tbody>
               {filtered.map(e => {
                 const cfg = CAT_CFG[e.category] || CAT_CFG.other
+                const isEditing = editing === e.id && showForm
                 return (
-                  <tr key={e.id} className="data-table" style={{ borderBottom: '1px solid #F1F5F9' }}>
+                  <tr key={e.id} className="data-table" style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: isEditing ? '#F0FDF4' : 'transparent' }}>
                     <td className="px-4 py-3.5 text-xs font-medium" style={{ color: '#64748B' }}>{e.date}</td>
                     <td className="px-4 py-3.5 font-semibold" style={{ color: '#0F172A' }}>{e.description}</td>
                     <td className="px-4 py-3.5 text-sm" style={{ color: '#64748B' }}>{(e.fleet as any)?.make} {(e.fleet as any)?.model}</td>
@@ -237,28 +293,33 @@ export default function ExpensesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-right">
-                      {confirmDelete === e.id ? (
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button onClick={() => remove(e.id)}
-                            className="text-xs px-2 py-0.5 rounded-md font-medium text-white"
-                            style={{ backgroundColor: '#DC2626' }}>
-                            Delete
-                          </button>
-                          <button onClick={() => setConfirmDelete(null)}
-                            className="text-xs px-2 py-0.5 rounded-md font-medium"
-                            style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
-                            Cancel
-                          </button>
+                      {confirmDelete === e.id && !showForm ? (
+                        <div className="flex justify-end">
+                          <ConfirmDelete
+                            label="Delete?"
+                            onConfirm={() => remove(e.id)}
+                            onCancel={() => setConfirmDelete(null)}
+                          />
                         </div>
                       ) : (
-                        <button onClick={() => setConfirmDelete(e.id)}
-                          className="p-1 rounded transition-colors hover:bg-red-50"
-                          title="Remove expense">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                            <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                          </svg>
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button onClick={() => startEdit(e)}
+                            className="p-1 rounded transition-colors hover:bg-slate-100"
+                            title="Edit expense">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                          </button>
+                          <button onClick={() => setConfirmDelete(e.id)}
+                            className="p-1 rounded transition-colors hover:bg-red-50"
+                            title="Delete expense">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                              <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                            </svg>
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

@@ -9,19 +9,29 @@ export async function GET() {
     const ctx = await buildFleetContext()
     const fleetSection = buildDynamicFleetSection(ctx)
 
+    const hasData = ctx.vehicles.length > 0 || ctx.recentTrips.length > 0
+
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
-      system: `You are a Turo fleet business advisor. Based on the host's fleet data, generate exactly 4 concise, actionable tips or insights.
-Return ONLY a valid JSON array with no markdown, no code fences, no extra text. Each item must have:
+      max_tokens: 700,
+      system: `You are a Turo fleet business advisor generating personalized daily insights.
+
+RULES:
+- Generate exactly 4 tips as a JSON array. Return ONLY the array — no markdown, no code fences, no other text.
+- Each tip MUST reference specific data from the fleet context: use actual vehicle names (make/model), dollar amounts, mileage numbers, guest names, or dates from the data below.
+- If a vehicle needs maintenance, name it. If YTD profit margin is low, state the actual margin. If a document expires soon, name the vehicle and document.
+- Generic tips like "consider raising your prices" are forbidden. Every tip must be grounded in the host's actual numbers.
+- If no fleet data exists yet, generate onboarding tips to help the host get started.
+
+Each JSON object must have:
 - "category": one of "pricing", "maintenance", "tax", "bookings"
-- "title": short title (4-6 words max)
-- "tip": one sentence describing the insight or action (under 20 words)
-- "prompt": a ready-to-send question for the AI advisor (under 15 words)`,
+- "title": 4-6 words, specific (e.g. "Accord Oil Change Overdue" not "Maintenance Needed")
+- "tip": one sentence under 25 words citing a real data point from the fleet context
+- "prompt": a ready-to-send question for the AI advisor referencing the specific vehicle/issue (under 18 words)`,
       messages: [
         {
           role: 'user',
-          content: `Here is the current fleet data:\n\n${fleetSection}\n\nGenerate 4 tips as a JSON array.`,
+          content: `Fleet context (${new Date().toLocaleDateString()}):\n\n${fleetSection}\n\n${hasData ? 'Generate 4 personalized tips grounded in the data above.' : 'No fleet data yet — generate 4 onboarding tips to help the host get set up.'}`,
         },
       ],
     })
@@ -32,7 +42,6 @@ Return ONLY a valid JSON array with no markdown, no code fences, no extra text. 
     try {
       tips = JSON.parse(raw)
     } catch {
-      // Try to extract JSON array if model added extra text
       const match = raw.match(/\[[\s\S]*\]/)
       tips = match ? JSON.parse(match[0]) : []
     }

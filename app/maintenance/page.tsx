@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import type { MaintenanceItem, Vehicle } from '@/lib/types'
+import { inputCls, inputStyle } from '@/lib/ui'
+import ConfirmDelete from '@/components/ConfirmDelete'
 
 const STATUS_CFG = {
   ok:        { bg: '#F0FDF4', text: '#16A34A', dot: '#22C55E', label: 'OK' },
@@ -9,15 +11,14 @@ const STATUS_CFG = {
   completed: { bg: '#F1F5F9', text: '#64748B', dot: '#94A3B8', label: 'Completed' },
 }
 
-const inputCls = "w-full text-sm px-3 py-2 rounded-lg"
-const inputStyle = { border: '1px solid #E2E8F0', color: '#0F172A', outline: 'none', backgroundColor: 'white' }
-
 export default function MaintenancePage() {
   const [items, setItems] = useState<MaintenanceItem[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ vehicle_id: '', service_type: '', interval_miles: 5000, interval_days: 180, last_service_date: '', last_service_mileage: 0, notes: '', cost: '' })
   const [saving, setSaving] = useState(false)
+  // Expense auto-log prompt
+  const [expensePrompt, setExpensePrompt] = useState<{ item: MaintenanceItem; cost: number } | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<Partial<Omit<MaintenanceItem, 'cost'> & { cost: string }>>({})
@@ -50,7 +51,30 @@ export default function MaintenancePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: item.id, status: 'ok', last_service_date: today, last_service_mileage: vehicle?.current_mileage, next_due_date: nextDate, next_due_mileage: nextMileage }),
     })
+
+    // Offer to auto-log as expense if cost is recorded
+    if (item.cost != null && Number(item.cost) > 0) {
+      setExpensePrompt({ item, cost: Number(item.cost) })
+    }
+
     load()
+  }
+
+  async function logAsExpense(item: MaintenanceItem, cost: number) {
+    const today = new Date().toISOString().slice(0, 10)
+    await fetch('/api/expenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vehicle_id: item.vehicle_id,
+        date: today,
+        category: 'maintenance',
+        description: item.service_type,
+        amount: cost,
+        notes: 'Auto-logged from maintenance completion',
+      }),
+    })
+    setExpensePrompt(null)
   }
 
   async function addCustom() {
@@ -119,6 +143,39 @@ export default function MaintenancePage() {
 
   return (
     <div className="p-4 md:p-7 max-w-5xl mx-auto">
+
+      {/* Expense auto-log prompt */}
+      {expensePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(2px)' }}>
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4" style={{ boxShadow: '0 20px 40px rgba(0,0,0,0.2)', border: '1px solid #E2E8F0' }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: '#F0FDF4' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </div>
+            <h3 className="text-base font-semibold mb-1" style={{ color: '#0F172A' }}>Log as expense too?</h3>
+            <p className="text-sm mb-5" style={{ color: '#64748B' }}>
+              <strong>{expensePrompt.item.service_type}</strong> has a cost of{' '}
+              <strong style={{ color: '#1D9E75' }}>${expensePrompt.cost.toFixed(2)}</strong>. Add it to Expenses for accurate P&amp;L?
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => logAsExpense(expensePrompt.item, expensePrompt.cost)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium text-white"
+                style={{ backgroundColor: '#1D9E75' }}>
+                Yes, log expense
+              </button>
+              <button
+                onClick={() => setExpensePrompt(null)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium"
+                style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-7">
         <div>
@@ -251,14 +308,11 @@ export default function MaintenancePage() {
                   <p className="text-sm font-medium" style={{ color: '#E11D48' }}>
                     Delete {item.service_type} for {(item.fleet as any)?.make} {(item.fleet as any)?.model}?
                   </p>
-                  <div className="flex gap-2">
-                    <button onClick={() => deleteItem(item.id)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
-                      style={{ backgroundColor: '#E11D48' }}>Delete</button>
-                    <button onClick={() => setConfirmDelete(null)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                      style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>Cancel</button>
-                  </div>
+                  <ConfirmDelete
+                    label=""
+                    onConfirm={() => deleteItem(item.id)}
+                    onCancel={() => setConfirmDelete(null)}
+                  />
                 </div>
               )}
 

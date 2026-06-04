@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import type { Guest, Trip, TripLineItem, Vehicle } from '@/lib/types'
+import { inputCls, inputStyle } from '@/lib/ui'
+import ConfirmDelete from '@/components/ConfirmDelete'
 
 const EMPTY_FORM = {
   vehicle_id: '',
@@ -56,8 +58,6 @@ const LINE_ITEM_TYPES = [
   { value: 'other', label: 'Other' },
 ]
 
-const inputCls = "w-full text-sm px-3 py-2 rounded-lg"
-const inputStyle = { border: '1px solid #E2E8F0', color: '#0F172A', outline: 'none', backgroundColor: 'white' }
 
 export default function TripsPage() {
   const [trips, setTrips] = useState<Trip[]>([])
@@ -594,15 +594,11 @@ export default function TripsPage() {
             {editing && (
               <div className="ml-auto">
                 {confirmDelete === editing ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm" style={{ color: '#64748B' }}>Delete this trip?</span>
-                    <button onClick={() => remove(editing)}
-                      className="px-3 py-1.5 rounded-lg text-sm font-medium text-white"
-                      style={{ backgroundColor: '#E11D48' }}>Delete</button>
-                    <button onClick={() => setConfirmDelete(null)}
-                      className="px-3 py-1.5 rounded-lg text-sm font-medium"
-                      style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>Cancel</button>
-                  </div>
+                  <ConfirmDelete
+                    label="Delete this trip?"
+                    onConfirm={() => remove(editing)}
+                    onCancel={() => setConfirmDelete(null)}
+                  />
                 ) : (
                   <button onClick={() => setConfirmDelete(editing)}
                     className="px-3 py-1.5 rounded-lg text-sm font-medium"
