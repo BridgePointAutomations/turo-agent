@@ -10,7 +10,7 @@ TuroAgent is a Next.js 14 fleet management dashboard for Turo car-sharing hosts.
 - **Database**: Supabase (PostgreSQL) via `@supabase/supabase-js`
 - **AI**: Anthropic SDK (`claude-sonnet-4-6` for chat, `claude-haiku-4-5` for tips)
 - **Styling**: Tailwind CSS + inline CSS custom properties (no component library)
-- **Markdown rendering**: `react-markdown` + `remark-gfm` (chat responses only)
+- **Markdown rendering**: `react-markdown` + `remark-gfm` (chat + VIN report; shared via `lib/mdComponents.tsx`)
 - **Language**: TypeScript (strict)
 
 ## Commands
@@ -30,6 +30,7 @@ Copy `.env.local.example` to `.env.local` and fill in:
 NEXT_PUBLIC_SUPABASE_URL=       # Supabase project URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY=  # Supabase anon key (public)
 ANTHROPIC_API_KEY=              # Anthropic API key (server-only, never exposed to client)
+VINAUDIT_API_KEY=               # Optional — enables accident/ownership history in VIN Lookup (~$0.50/lookup at vinaudit.com)
 ```
 
 ## Project Structure
@@ -47,6 +48,7 @@ app/
     documents/route.ts  # Vehicle document vault
     tips/route.ts       # AI daily tips (data-aware, Haiku)
     upload/route.ts     # Supabase Storage file upload
+    vin/route.ts        # VIN analysis: NHTSA fetch + Claude streaming (POST)
   dashboard/            # KPI cards, revenue chart, maintenance alerts
   fleet/                # Vehicle CRUD, ROI tracker, document vault
   trips/                # Trip logging, line items, guest combobox
@@ -55,6 +57,7 @@ app/
   maintenance/          # Service item tracker, auto-link to expenses
   calendar/             # Month calendar + quick trip creation
   reports/              # Per-vehicle P&L, Schedule C, CSV export
+  vin-lookup/           # VIN pre-purchase analysis (NHTSA + optional VinAudit + Claude)
 
 components/
   Sidebar.tsx           # Nav sidebar (desktop sticky + mobile drawer)
@@ -71,6 +74,7 @@ lib/
   ui.ts                 # Shared inputCls / inputStyle constants
   export.ts             # CSV download utility
   database.types.ts     # Supabase-generated DB types
+  mdComponents.tsx      # Shared react-markdown component overrides (used in ChatPanel + VIN Lookup)
 ```
 
 ## Architecture Patterns
@@ -83,7 +87,7 @@ The chat route (`app/api/chat/route.ts`) streams SSE. Each `data:` line is a JSO
 
 The system prompt is built in `lib/context.ts` via `buildSystemPrompt(ctx)` which concatenates the static role/knowledge base with a live fleet snapshot from Supabase.
 
-Chat responses render via `react-markdown` + `remark-gfm` in `ChatPanel.tsx`, with fully custom component overrides (`mdComponents`) for all markdown elements — tables, ordered/unordered lists, inline bold, blockquotes, code, headers, and horizontal rules. Do not revert to a hand-rolled line splitter; the renderer handles full GFM including pipe tables.
+Chat responses render via `react-markdown` + `remark-gfm`. The shared `mdComponents` overrides live in `lib/mdComponents.tsx` and are imported by both `ChatPanel.tsx` and `app/vin-lookup/page.tsx`. They cover all GFM elements — tables, ordered/unordered lists, inline bold, blockquotes, code, headers, and horizontal rules. Do not revert to a hand-rolled line splitter; the renderer handles full GFM including pipe tables.
 
 ### AI Tips
 `app/api/tips/route.ts` uses `claude-haiku-4-5` to generate 4 personalized tips as a JSON array. Tips are grounded in actual fleet data (vehicle names, revenue numbers, maintenance alerts). The frontend (`AITipsPanel.tsx`) caches by fleet fingerprint (`date:vehicleCount:tripCount:alertCount`) so tips auto-refresh when fleet state changes.
@@ -111,6 +115,7 @@ No global store. Each page manages its own state with `useState` + `useEffect` f
 | AI Fleet Advisor (chat) | `components/ChatPanel.tsx` + `ChatPopup.tsx` |
 | AI daily tips | `components/AITipsPanel.tsx` |
 | Document vault | `app/fleet/page.tsx` (expandable per vehicle) |
+| VIN pre-purchase analysis | `app/vin-lookup/page.tsx` + `app/api/vin/route.ts` |
 
 ## Maintenance → Expense Auto-Link
 
@@ -132,3 +137,17 @@ Supabase Storage buckets used: `vehicle-docs`, `trip-receipts`, `expense-receipt
 - Do not reimplement confirm-delete UX inline — use `<ConfirmDelete />` from `@/components/ConfirmDelete`
 - Do not create a new AppShell wrapper — the shell layout is inlined directly in each section's `layout.tsx`
 - Do not replace `react-markdown` in `ChatPanel.tsx` with a hand-rolled line parser — the GFM renderer handles tables, inline bold, numbered lists, and blockquotes that a naive splitter cannot
+- Do not redefine `mdComponents` locally in any page — import from `@/lib/mdComponents`
+
+## VIN Lookup — Data Sources
+
+`app/api/vin/route.ts` calls these endpoints in order:
+
+1. **NHTSA VIN Decode** — `https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/{VIN}?format=json` — year/make/model/trim/engine (free, no key)
+2. **NHTSA Recalls** — `https://api.nhtsa.gov/recalls/recallsByVehicle` (free)
+3. **NHTSA Complaints** — `https://api.nhtsa.gov/complaints/complaintsByVehicle` (free)
+4. **NHTSA Safety Ratings** — `https://api.nhtsa.gov/SafetyRatings/modelyear/{year}/make/{make}/model/{model}` (free)
+5. **NHTSA Investigations** — `https://api.nhtsa.gov/investigations/` (free)
+6. **VinAudit** — `https://www.vinaudit.com/api/v2/vehicle_history/` — accident/ownership/title history (optional, requires `VINAUDIT_API_KEY`)
+
+Items 2–6 are fetched in `Promise.allSettled()` in parallel after the VIN decode succeeds. Timeouts are handled via `AbortController` (5s each); failures produce "data unavailable" notes in the Claude prompt rather than hard errors. The full data set is streamed through Claude Sonnet as an 11-section markdown report rendered by `mdComponents`.
