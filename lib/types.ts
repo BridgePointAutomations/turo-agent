@@ -151,3 +151,17 @@ export interface FleetContext {
   expiringDocs?: ExpiringDocument[]
   payoutDiscrepancies?: TripWithRelations[]
 }
+
+export interface VinLookupRecord {
+  id: string
+  created_at: string
+  vin: string
+  year: string | null
+  make: string | null
+  model: string | null
+  trim: string | null
+  purchase_price: number | null
+  mileage: number | null
+  report_markdown: string
+  notes: string | null
+}
