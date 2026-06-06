@@ -38,17 +38,19 @@ VINAUDIT_API_KEY=               # Optional — enables accident/ownership histor
 ```
 app/
   api/                  # Route handlers (Next.js App Router)
-    chat/route.ts       # Streaming SSE chat endpoint
-    conversations/      # Conversation CRUD
-    fleet/route.ts      # Vehicle CRUD
-    trips/route.ts      # Trip CRUD + line items
-    expenses/route.ts   # Expense CRUD (GET, POST, PATCH, DELETE)
-    guests/route.ts     # Guest CRUD
-    maintenance/route.ts# Maintenance CRUD + live status computation
-    documents/route.ts  # Vehicle document vault
-    tips/route.ts       # AI daily tips (data-aware, Haiku)
-    upload/route.ts     # Supabase Storage file upload
-    vin/route.ts        # VIN analysis: NHTSA fetch + Claude streaming (POST)
+    chat/route.ts           # Streaming SSE chat endpoint
+    conversations/          # Conversation CRUD
+    fleet/route.ts          # Vehicle CRUD
+    trips/route.ts          # Trip CRUD + line items
+    expenses/route.ts       # Expense CRUD (GET, POST, PATCH, DELETE)
+    guests/route.ts         # Guest CRUD
+    templates/route.ts      # Message template overrides (GET, PATCH — upsert by key)
+    generate-message/route.ts # AI guest message generation (POST, streaming SSE)
+    maintenance/route.ts    # Maintenance CRUD + live status computation
+    documents/route.ts      # Vehicle document vault
+    tips/route.ts           # AI daily tips (data-aware, Haiku)
+    upload/route.ts         # Supabase Storage file upload
+    vin/route.ts            # VIN analysis: NHTSA fetch + Claude streaming (POST)
   dashboard/            # KPI cards, revenue chart, maintenance alerts
   fleet/                # Vehicle CRUD, ROI tracker, document vault
   trips/                # Trip logging, line items, guest combobox
@@ -108,7 +110,7 @@ No global store. Each page manages its own state with `useState` + `useEffect` f
 | Fleet CRUD + ROI tracker | `app/fleet/page.tsx` |
 | Trip logging + line items | `app/trips/page.tsx` |
 | Expense CRUD (with edit) | `app/expenses/page.tsx` |
-| Guest flagging + templates | `app/guests/page.tsx` |
+| Guest flagging + AI message templates | `app/guests/page.tsx` |
 | Maintenance tracker | `app/maintenance/page.tsx` |
 | Calendar + trip creation | `app/calendar/page.tsx` |
 | P&L + Schedule C export | `app/reports/page.tsx` |
@@ -121,6 +123,26 @@ No global store. Each page manages its own state with `useState` + `useEffect` f
 
 When a maintenance item with a recorded cost is marked complete, a modal prompts the user to log it as an expense. This keeps P&L accurate without double-entry. The flow calls `POST /api/expenses` with `category: 'maintenance'`.
 
+## Message Templates Architecture
+
+Five default templates live as constants in `app/guests/page.tsx` (the `TEMPLATES` object). The system supports three capabilities:
+
+**Richer auto-fill** — `computeFilled(raw, guest, trips)` replaces tokens using the guest's most recent trip:
+
+| Token | Source |
+|---|---|
+| `[Guest Name]` | `guest.name` |
+| `[Car]` | `trip.fleet.year/make/model` |
+| `[Start Date]` | `trip.start_date` |
+| `[End Date]` | `trip.end_date` |
+| `[X]` | `trip.daily_rate` (rounded) |
+
+**DB-backed customization** — `app/api/templates/route.ts` exposes `GET` (returns saved overrides as `{ [key]: body }`) and `PATCH` (upserts by key). The page merges DB overrides over the hardcoded defaults on mount. Only customized templates are stored in the `message_templates` table.
+
+**AI generation** — `app/api/generate-message/route.ts` accepts `{ purpose, guestName, guestFlag, carName?, tripDates? }` and streams a Claude Sonnet response. Tone is automatically adjusted based on the guest flag (great/caution/blocked/none). The stream format is identical to `/api/chat` (`{ delta }` / `{ done: true }` / `{ error }`).
+
+Do not add a `pickup_time` column to the `trips` table for the `[Time]` placeholder — that column does not exist and `[Time]` is intentionally left as a manual placeholder.
+
 ## Database
 
 Schema lives in `supabase/schema.sql`. Migrations in `supabase/migrations/`. The project uses two Supabase DB views:
@@ -128,6 +150,8 @@ Schema lives in `supabase/schema.sql`. Migrations in `supabase/migrations/`. The
 - `ytd_expenses_summary` — aggregates expenses by year
 
 Supabase Storage buckets used: `vehicle-docs`, `trip-receipts`, `expense-receipts`.
+
+The `message_templates` table stores only host-customized template bodies (keyed by template slug). Rows are upserted on save; the hardcoded `TEMPLATES` constant in `app/guests/page.tsx` serves as the fallback for any key not in the DB.
 
 ## Do Not
 
@@ -138,6 +162,9 @@ Supabase Storage buckets used: `vehicle-docs`, `trip-receipts`, `expense-receipt
 - Do not create a new AppShell wrapper — the shell layout is inlined directly in each section's `layout.tsx`
 - Do not replace `react-markdown` in `ChatPanel.tsx` with a hand-rolled line parser — the GFM renderer handles tables, inline bold, numbered lists, and blockquotes that a naive splitter cannot
 - Do not redefine `mdComponents` locally in any page — import from `@/lib/mdComponents`
+- Do not add a `pickup_time` column to `trips` for the `[Time]` template placeholder — leave it as a manual placeholder
+- Do not redefine `computeFilled` locally in any component — it lives in `app/guests/page.tsx` and is the single source of truth for template token replacement
+- Do not save AI-generated messages as template bodies — the "Save template" action saves the raw body (with placeholders), not the composed output
 
 ## VIN Lookup — Data Sources
 

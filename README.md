@@ -9,7 +9,7 @@ AI-powered Turo business management platform. Built with Next.js 14, Supabase, a
 - **Fleet management** — add vehicles, track mileage, status, daily rates
 - **Trip logging** — log trips with auto net revenue calculation, auto mileage update
 - **Expense tracking** — categorized expenses with per-vehicle and monthly breakdowns
-- **Guest management** — flag system (great/caution/blocked), notes, message templates
+- **Guest management** — flag system (great/caution/blocked), notes, AI-powered message templates with richer auto-fill and persistent customization
 - **Maintenance scheduler** — auto-seeded service intervals per vehicle, mark-complete flow
 - **Dashboard** — revenue chart, maintenance alerts, fleet overview, inline AI chat
 
@@ -78,7 +78,7 @@ app/
   fleet/           # Vehicle CRUD
   trips/           # Trip logging + table
   expenses/        # Expense log with category breakdown
-  guests/          # Guest profiles, flags, message templates
+  guests/          # Guest profiles, flags, AI message templates
   maintenance/     # Service schedule + mark-complete flow
   vin-lookup/      # VIN pre-purchase analysis (NHTSA + Claude)
   api/
@@ -86,7 +86,9 @@ app/
     fleet/         # GET/POST/PATCH/DELETE
     trips/         # GET/POST/PATCH
     expenses/      # GET/POST/DELETE
-    guests/        # GET/POST/PATCH
+    guests/        # GET/POST/PATCH/DELETE
+    templates/     # GET/PATCH — DB-backed custom message template bodies
+    generate-message/ # POST — Claude-generated guest message (streaming SSE)
     maintenance/   # GET/POST/PATCH
     vin/           # POST — NHTSA fetch + Claude streaming analysis
 components/

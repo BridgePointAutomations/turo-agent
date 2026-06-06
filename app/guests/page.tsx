@@ -12,22 +12,42 @@ const FLAG_CONFIG = {
 }
 
 const TEMPLATES = {
-  welcome: `Hi [Guest Name]! Thanks for booking. Here are your pickup details:\n\n📍 Location: [Address]\n🔑 Key access: [Instructions]\n📱 My number: [Phone]\n\nFeel free to reach out with any questions. Enjoy the trip!`,
-  late_return: `Hi [Guest Name], just checking in — your trip was scheduled to end today. Let me know if you need to extend, and I can check availability. Extensions are $[X]/day. Please coordinate before the trip ends to avoid late fees.`,
+  welcome: `Hi [Guest Name]! Thanks for booking. Here are your pickup details:\n\n📍 Location: [Address]\n🔑 Key access: [Instructions]\n📱 My number: [Phone]\n⏰ Trip start: [Start Date]\n\nFeel free to reach out with any questions. Enjoy the trip!`,
+  late_return: `Hi [Guest Name], just checking in — your trip was scheduled to end [End Date]. Let me know if you need to extend, and I can check availability. Extensions are $[X]/day. Please coordinate before the trip ends to avoid late fees.`,
   damage_notice: `Hi [Guest Name], I noticed some damage to the vehicle that wasn't present at pickup. I've documented it with photos and will be filing a claim through Turo. Please review the Turo claims process at support.turo.com. I appreciate your cooperation.`,
   review_request: `Thanks so much for choosing my [Car] — it was great having you as a guest! If you have a moment, I'd really appreciate a review. I'll be leaving one for you as well. Hope to host you again!`,
-  pickup_reminder: `Hi [Guest Name]! Your trip starts tomorrow. Quick reminder:\n\n📍 Pickup: [Address]\n⏰ Time: [Time]\n🔑 [Access instructions]\n\nSee you then!`,
+  pickup_reminder: `Hi [Guest Name]! Your trip starts [Start Date]. Quick reminder:\n\n📍 Pickup: [Address]\n⏰ Time: [Time]\n🔑 [Access instructions]\n\nSee you then!`,
 }
 
+type TemplateKey = keyof typeof TEMPLATES
+
 type GuestWithTrips = Guest & { trips?: Trip[] }
+
+function computeFilled(raw: string, guest: GuestWithTrips | null | undefined, trips: Trip[]): string {
+  if (!raw) return ''
+  if (!guest) return raw
+  const lastTrip = trips[0]
+  const carName = lastTrip
+    ? `${(lastTrip.fleet as any)?.year || ''} ${(lastTrip.fleet as any)?.make || ''} ${(lastTrip.fleet as any)?.model || ''}`.trim() || '[Car]'
+    : '[Car]'
+  const startDate = lastTrip?.start_date || '[Start Date]'
+  const endDate = lastTrip?.end_date || '[End Date]'
+  const extensionPrice = lastTrip?.daily_rate != null
+    ? String(Math.round(Number(lastTrip.daily_rate)))
+    : '[X]'
+  return raw
+    .replace(/\[Guest Name\]/g, guest.name)
+    .replace(/\[Car\]/g, carName)
+    .replace(/\[Start Date\]/g, startDate)
+    .replace(/\[End Date\]/g, endDate)
+    .replace(/\[X\]/g, extensionPrice)
+}
 
 export default function GuestsPage() {
   const [guests, setGuests] = useState<GuestWithTrips[]>([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', flag: 'none' as Guest['flag'], notes: '', turo_profile_url: '' })
   const [saving, setSaving] = useState(false)
-  const [template, setTemplate] = useState<keyof typeof TEMPLATES | ''>('')
-  const [copied, setCopied] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ name: '', flag: 'none' as Guest['flag'], notes: '', turo_profile_url: '' })
   const [editSaving, setEditSaving] = useState(false)
@@ -38,14 +58,33 @@ export default function GuestsPage() {
   // Search + filter
   const [search, setSearch] = useState('')
   const [flagFilter, setFlagFilter] = useState<'' | Guest['flag']>('')
-  // Template auto-fill
+  // Template state
+  const [template, setTemplate] = useState<TemplateKey | ''>('')
+  const [loadedTemplates, setLoadedTemplates] = useState<Record<TemplateKey, string>>({ ...TEMPLATES })
   const [templateGuestId, setTemplateGuestId] = useState('')
+  const [composedText, setComposedText] = useState('')
+  const [copied, setCopied] = useState(false)
+  // Raw template editor
+  const [showRawEdit, setShowRawEdit] = useState(false)
+  const [rawBodyEdit, setRawBodyEdit] = useState('')
+  const [rawBodyDirty, setRawBodyDirty] = useState(false)
+  const [templateSaving, setTemplateSaving] = useState(false)
+  const [templateSaved, setTemplateSaved] = useState(false)
+  // AI generation
+  const [generating, setGenerating] = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadTemplates() }, [])
 
   async function load() {
     const data = await fetch('/api/guests').then(r => r.json())
     setGuests(Array.isArray(data) ? data : [])
+  }
+
+  async function loadTemplates() {
+    const data = await fetch('/api/templates').then(r => r.json())
+    if (data && typeof data === 'object') {
+      setLoadedTemplates(prev => ({ ...prev, ...data }))
+    }
   }
 
   async function save() {
@@ -81,12 +120,14 @@ export default function GuestsPage() {
     load()
   }
 
-  async function fetchTripsForGuest(guestId: string) {
-    if (guestTrips[guestId]) return
+  async function fetchTripsForGuest(guestId: string): Promise<Trip[]> {
+    if (guestTrips[guestId]) return guestTrips[guestId]
     setLoadingTrips(prev => new Set(prev).add(guestId))
     const data = await fetch(`/api/trips?guest_id=${guestId}`).then(r => r.json())
-    setGuestTrips(prev => ({ ...prev, [guestId]: Array.isArray(data) ? data : [] }))
+    const trips: Trip[] = Array.isArray(data) ? data : []
+    setGuestTrips(prev => ({ ...prev, [guestId]: trips }))
     setLoadingTrips(prev => { const s = new Set(prev); s.delete(guestId); return s })
+    return trips
   }
 
   async function toggleTrips(guestId: string) {
@@ -98,30 +139,121 @@ export default function GuestsPage() {
     fetchTripsForGuest(guestId)
   }
 
-  async function selectTemplateGuest(id: string) {
-    setTemplateGuestId(id)
-    if (id) fetchTripsForGuest(id)
+  function selectTemplateKey(key: TemplateKey) {
+    const newKey = key === template ? '' : key
+    setTemplate(newKey)
+    setShowRawEdit(false)
+    setCopied(false)
+    if (!newKey) {
+      setComposedText('')
+      setRawBodyEdit('')
+      setRawBodyDirty(false)
+      return
+    }
+    const raw = loadedTemplates[newKey] || TEMPLATES[newKey]
+    setRawBodyEdit(raw)
+    setRawBodyDirty(false)
+    const guest = templateGuestId ? guests.find(g => g.id === templateGuestId) : null
+    const trips = guest ? (guestTrips[guest.id] ?? []) : []
+    setComposedText(computeFilled(raw, guest, trips))
   }
 
-  function getFilledTemplate(): string {
-    if (!template) return ''
-    const raw = TEMPLATES[template]
+  async function selectTemplateGuest(id: string) {
+    setTemplateGuestId(id)
+    setCopied(false)
+    if (!template) return
+    const raw = loadedTemplates[template] || TEMPLATES[template]
+    if (!id) {
+      setComposedText(computeFilled(raw, null, []))
+      return
+    }
+    const guest = guests.find(g => g.id === id) ?? null
+    const trips = await fetchTripsForGuest(id)
+    setComposedText(computeFilled(raw, guest, trips))
+  }
+
+  async function saveTemplate() {
+    if (!template) return
+    setTemplateSaving(true)
+    await fetch('/api/templates', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: template, body: rawBodyEdit }),
+    })
+    setLoadedTemplates(prev => ({ ...prev, [template]: rawBodyEdit }))
+    setRawBodyDirty(false)
+    setTemplateSaving(false)
+    setTemplateSaved(true)
+    setTimeout(() => setTemplateSaved(false), 2500)
     const guest = templateGuestId ? guests.find(g => g.id === templateGuestId) : null
-    if (!guest) return raw
+    const trips = guest ? (guestTrips[guest.id] ?? []) : []
+    setComposedText(computeFilled(rawBodyEdit, guest, trips))
+  }
+
+  function resetTemplate() {
+    if (!template) return
+    setRawBodyEdit(TEMPLATES[template])
+    setRawBodyDirty(true)
+  }
+
+  async function generateWithAI() {
+    if (!template || !templateGuestId) return
+    const guest = guests.find(g => g.id === templateGuestId)
+    if (!guest) return
+
     const trips = guestTrips[guest.id] ?? []
     const lastTrip = trips[0]
     const carName = lastTrip
-      ? `${(lastTrip.fleet as any)?.year || ''} ${(lastTrip.fleet as any)?.make || ''} ${(lastTrip.fleet as any)?.model || ''}`.trim() || '[Car]'
-      : '[Car]'
-    return raw
-      .replace(/\[Guest Name\]/g, guest.name)
-      .replace(/\[Car\]/g, carName)
+      ? `${(lastTrip.fleet as any)?.year || ''} ${(lastTrip.fleet as any)?.make || ''} ${(lastTrip.fleet as any)?.model || ''}`.trim() || undefined
+      : undefined
+    const tripDates = lastTrip ? `${lastTrip.start_date} to ${lastTrip.end_date}` : undefined
+
+    setGenerating(true)
+    setComposedText('')
+    setCopied(false)
+
+    const res = await fetch('/api/generate-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        purpose: template.replace(/_/g, ' '),
+        guestName: guest.name,
+        guestFlag: guest.flag,
+        carName,
+        tripDates,
+      }),
+    })
+
+    if (!res.ok || !res.body) {
+      setGenerating(false)
+      return
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n\n')
+      buffer = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const parsed = JSON.parse(line.slice(6))
+          if (parsed.delta) setComposedText(prev => prev + parsed.delta)
+          if (parsed.done || parsed.error) setGenerating(false)
+        } catch { /* ignore parse errors */ }
+      }
+    }
+    setGenerating(false)
   }
 
   function copyTemplate() {
-    if (!template) return
-    const text = getFilledTemplate()
-    navigator.clipboard.writeText(text)
+    if (!composedText) return
+    navigator.clipboard.writeText(composedText)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -132,14 +264,17 @@ export default function GuestsPage() {
     return matchName && matchFlag
   })
 
-  const filledText = getFilledTemplate()
-  const hasAutoFill = templateGuestId && template && (
-    TEMPLATES[template].includes('[Guest Name]') || TEMPLATES[template].includes('[Car]')
-  )
+  const templateRaw = template ? (loadedTemplates[template] || TEMPLATES[template] || '') : ''
+  const hasAutoFill = !!(templateGuestId && template && (
+    templateRaw.includes('[Guest Name]') ||
+    templateRaw.includes('[Car]') ||
+    templateRaw.includes('[Start Date]') ||
+    templateRaw.includes('[End Date]') ||
+    templateRaw.includes('[X]')
+  ))
 
-  // Find placeholders that weren't auto-filled (e.g. [Address], [Phone], [Time])
-  const remainingPlaceholders = filledText
-    ? Array.from(filledText.matchAll(/\[([^\]]+)\]/g)).map(m => m[1])
+  const remainingPlaceholders = composedText && !generating
+    ? Array.from(composedText.matchAll(/\[([^\]]+)\]/g)).map(m => m[1])
     : []
 
   return (
@@ -207,12 +342,14 @@ export default function GuestsPage() {
           </div>
           <div>
             <h2 className="text-sm font-semibold" style={{ color: '#0F172A' }}>Message Templates</h2>
-            <p className="text-xs" style={{ color: '#94A3B8' }}>Select a template, then pick a guest to auto-fill placeholders</p>
+            <p className="text-xs" style={{ color: '#94A3B8' }}>Select a template, pick a guest to auto-fill, or generate with AI</p>
           </div>
         </div>
+
+        {/* Template selector buttons */}
         <div className="flex flex-wrap gap-2 mb-3">
-          {(Object.keys(TEMPLATES) as (keyof typeof TEMPLATES)[]).map(t => (
-            <button key={t} onClick={() => setTemplate(t === template ? '' : t)}
+          {(Object.keys(TEMPLATES) as TemplateKey[]).map(t => (
+            <button key={t} onClick={() => selectTemplateKey(t)}
               className="text-xs px-3 py-1.5 rounded-lg font-medium capitalize transition-all"
               style={template === t
                 ? { backgroundColor: '#1D9E75', color: 'white', border: '1px solid #1D9E75' }
@@ -221,11 +358,12 @@ export default function GuestsPage() {
             </button>
           ))}
         </div>
+
         {template && (
           <div>
-            {/* Guest selector for auto-fill */}
+            {/* Guest selector + badges + AI button */}
             {guests.length > 0 && (
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <span className="text-xs font-medium" style={{ color: '#374151' }}>Fill for:</span>
                 <select
                   value={templateGuestId}
@@ -243,8 +381,28 @@ export default function GuestsPage() {
                     Auto-filled
                   </span>
                 )}
+                {templateGuestId && (
+                  <button
+                    onClick={generateWithAI}
+                    disabled={generating}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-50"
+                    style={{ backgroundColor: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE' }}>
+                    {generating ? (
+                      <>
+                        <svg className="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                        </svg>
+                        Generating…
+                      </>
+                    ) : (
+                      <>✨ Generate with AI</>
+                    )}
+                  </button>
+                )}
               </div>
             )}
+
+            {/* Remaining placeholders warning */}
             {remainingPlaceholders.length > 0 && (
               <div className="mb-2.5 px-3 py-2 rounded-lg flex items-start gap-2"
                 style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A' }}>
@@ -263,16 +421,76 @@ export default function GuestsPage() {
                 </p>
               </div>
             )}
+
+            {/* Main editable textarea */}
             <div className="relative">
-              <textarea readOnly value={filledText} className="w-full text-sm p-3.5 rounded-lg resize-none"
+              <textarea
+                value={composedText}
+                onChange={e => !generating && setComposedText(e.target.value)}
+                disabled={generating}
+                className="w-full text-sm p-3.5 rounded-lg resize-none"
                 rows={5}
-                style={{ backgroundColor: '#F8FAFC', border: `1px solid ${remainingPlaceholders.length > 0 ? '#FDE68A' : '#E2E8F0'}`, color: '#374151', outline: 'none' }} />
-              <button onClick={copyTemplate}
-                className="absolute top-2.5 right-2.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
+                style={{
+                  backgroundColor: generating ? '#F8FAFC' : 'white',
+                  border: `1px solid ${remainingPlaceholders.length > 0 ? '#FDE68A' : '#E2E8F0'}`,
+                  color: '#374151',
+                  outline: 'none',
+                  cursor: generating ? 'wait' : 'text',
+                }}
+              />
+              <button
+                onClick={copyTemplate}
+                disabled={!composedText || generating}
+                className="absolute top-2.5 right-2.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-40"
                 style={{ border: '1px solid #E2E8F0', color: copied ? '#16A34A' : '#64748B', backgroundColor: copied ? '#F0FDF4' : 'white' }}>
                 {copied ? '✓ Copied' : 'Copy'}
               </button>
             </div>
+
+            {/* Customize template toggle */}
+            <div className="mt-2.5">
+              <button
+                onClick={() => setShowRawEdit(!showRawEdit)}
+                className="text-xs font-medium hover:underline flex items-center gap-1"
+                style={{ color: '#94A3B8' }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ transform: showRawEdit ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+                {showRawEdit ? 'Hide template editor' : 'Customize template'}
+              </button>
+            </div>
+
+            {/* Raw template editor */}
+            {showRawEdit && (
+              <div className="mt-2.5 pt-3" style={{ borderTop: '1px solid #F1F5F9' }}>
+                <p className="text-xs mb-2" style={{ color: '#94A3B8' }}>
+                  Edit the template wording. Use <code className="font-mono" style={{ color: '#64748B' }}>[Guest Name]</code>, <code className="font-mono" style={{ color: '#64748B' }}>[Car]</code>, <code className="font-mono" style={{ color: '#64748B' }}>[Start Date]</code>, <code className="font-mono" style={{ color: '#64748B' }}>[End Date]</code>, <code className="font-mono" style={{ color: '#64748B' }}>[X]</code> for auto-fill tokens. Saved changes persist across sessions.
+                </p>
+                <textarea
+                  value={rawBodyEdit}
+                  onChange={e => { setRawBodyEdit(e.target.value); setRawBodyDirty(true) }}
+                  rows={5}
+                  className="w-full text-sm p-3.5 rounded-lg resize-none"
+                  style={{ border: '1px solid #E2E8F0', color: '#374151', backgroundColor: '#F8FAFC', outline: 'none' }}
+                />
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={saveTemplate}
+                    disabled={templateSaving || !rawBodyDirty}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-40 transition-all"
+                    style={{ backgroundColor: templateSaved ? '#16A34A' : '#1D9E75' }}>
+                    {templateSaving ? 'Saving…' : templateSaved ? '✓ Saved' : 'Save template'}
+                  </button>
+                  <button
+                    onClick={resetTemplate}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                    style={{ border: '1px solid #E2E8F0', color: '#64748B', backgroundColor: 'white' }}>
+                    Reset to default
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
