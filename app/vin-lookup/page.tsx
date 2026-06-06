@@ -200,10 +200,12 @@ export default function VinLookupPage() {
                   border: activeId === r.id ? '1px solid rgba(29,158,117,0.2)' : '1px solid transparent',
                 }}
               >
-                <p className="text-xs font-semibold leading-tight truncate" style={{ color: activeId === r.id ? '#1D9E75' : '#0F172A' }}>
-                  {r.year && r.make && r.model ? `${r.year} ${r.make} ${r.model}` : r.vin}
-                </p>
-                <p className="text-xs mt-0.5 font-mono" style={{ color: '#94A3B8' }}>{r.vin}</p>
+                {r.year && r.make && r.model && (
+                  <p className="text-xs font-semibold leading-tight truncate" style={{ color: activeId === r.id ? '#1D9E75' : '#0F172A' }}>
+                    {r.year} {r.make} {r.model}
+                  </p>
+                )}
+                <p className="text-xs mt-0.5 font-mono truncate" style={{ color: r.year && r.make && r.model ? '#94A3B8' : (activeId === r.id ? '#1D9E75' : '#0F172A'), fontWeight: r.year && r.make && r.model ? 400 : 600 }}>{r.vin}</p>
                 <div className="flex items-center justify-between mt-1">
                   {r.purchase_price && (
                     <p className="text-xs" style={{ color: '#64748B' }}>${r.purchase_price.toLocaleString()}</p>
