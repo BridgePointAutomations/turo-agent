@@ -51,6 +51,7 @@ app/
     tips/route.ts           # AI daily tips (data-aware, Haiku)
     upload/route.ts         # Supabase Storage file upload
     vin/route.ts            # VIN analysis: NHTSA fetch + Claude streaming (POST)
+    vin-lookups/route.ts    # Saved VIN report CRUD: GET (includes report_markdown), POST, DELETE
   dashboard/            # KPI cards, revenue chart, maintenance alerts
   fleet/                # Vehicle CRUD, ROI tracker, document vault
   trips/                # Trip logging, line items, guest combobox

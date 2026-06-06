@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 export async function GET() {
   const { data, error } = await supabase
     .from('vin_lookups')
-    .select('id, created_at, vin, year, make, model, trim, purchase_price, mileage, notes')
+    .select('id, created_at, vin, year, make, model, trim, purchase_price, mileage, notes, report_markdown')
     .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)

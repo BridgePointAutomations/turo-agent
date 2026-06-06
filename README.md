@@ -91,6 +91,7 @@ app/
     generate-message/ # POST — Claude-generated guest message (streaming SSE)
     maintenance/   # GET/POST/PATCH
     vin/           # POST — NHTSA fetch + Claude streaming analysis
+    vin-lookups/   # GET/POST/DELETE — saved VIN report CRUD
 components/
   Sidebar.tsx      # Navigation
   ChatPanel.tsx    # AI chat UI
