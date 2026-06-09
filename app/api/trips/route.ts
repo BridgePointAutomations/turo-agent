@@ -85,6 +85,23 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const { id, line_items, ...updates } = await req.json()
+
+  // Auto-calculate miles_added when both odometer readings are present
+  if (updates.start_mileage != null && updates.end_mileage != null) {
+    updates.miles_added = Math.max(0, updates.end_mileage - updates.start_mileage)
+  } else if (updates.end_mileage != null && updates.start_mileage == null) {
+    // Fetch existing start_mileage to compute the diff
+    const { data: existing } = await supabase.from('trips').select('start_mileage').eq('id', id).single()
+    if (existing?.start_mileage != null) {
+      updates.miles_added = Math.max(0, updates.end_mileage - existing.start_mileage)
+    }
+  } else if (updates.start_mileage != null && updates.end_mileage == null) {
+    const { data: existing } = await supabase.from('trips').select('end_mileage').eq('id', id).single()
+    if (existing?.end_mileage != null) {
+      updates.miles_added = Math.max(0, existing.end_mileage - updates.start_mileage)
+    }
+  }
+
   const { data, error } = await supabase.from('trips').update(updates).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
