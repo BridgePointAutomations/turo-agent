@@ -3,11 +3,14 @@ import { useEffect, useState } from 'react'
 import type { Trip, Expense, Vehicle } from '@/lib/types'
 import { downloadCSV } from '@/lib/export'
 
+const IRS_RATES: Record<number, number> = { 2023: 0.655, 2024: 0.670, 2025: 0.700 }
+
 export default function ReportsPage() {
   const [trips, setTrips] = useState<Trip[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear())
+  const [deductionMethod, setDeductionMethod] = useState<'standard' | 'actual'>('standard')
 
   useEffect(() => {
     Promise.all([
@@ -100,41 +103,65 @@ export default function ReportsPage() {
   const expByCat = (cats: string[]) =>
     filteredExpenses.filter(e => cats.includes(e.category)).reduce((s, e) => s + Number(e.amount || 0), 0)
 
+  // Actual expense method buckets
   const carTruck = expByCat(['fuel', 'registration', 'parking'])
   const schedCInsurance = expByCat(['insurance'])
   const repairs = expByCat(['maintenance'])
   const otherExp = expByCat(['cleaning', 'other'])
-  const totalDeductions = carTruck + schedCInsurance + repairs + otherExp
+  const actualDeductions = carTruck + schedCInsurance + repairs + otherExp
+
+  // Standard mileage method
+  const totalMiles = filteredTrips.reduce((sum, t) => sum + (t.miles_added ?? 0), 0)
+  const irsRate = IRS_RATES[yearFilter] ?? 0.700
+  const mileageDeduction = totalMiles * irsRate
+  // Parking fees and cleaning are still separately deductible under standard mileage
+  const otherPlusParking = expByCat(['cleaning', 'other', 'parking'])
+  const standardDeductions = mileageDeduction + otherPlusParking
+
+  const activeDeductions = deductionMethod === 'standard' ? standardDeductions : actualDeductions
+
   const schedC = {
     grossReceipts: totals.gross,
     turoFees: totals.turoFees,
     netFromTuro: totals.netRevenue,
-    carTruck,
-    insurance: schedCInsurance,
-    repairs,
-    other: otherExp,
-    totalDeductions,
-    netProfit: totals.netRevenue - totalDeductions,
+    netProfit: totals.netRevenue - activeDeductions,
   }
 
   function exportScheduleC() {
-    const rows = [
+    const incomeRows = [
       { line: 'Line 1', description: 'Gross receipts (trip revenue)', amount: schedC.grossReceipts.toFixed(2) },
       { line: 'Line 2', description: 'Returns & allowances (Turo platform fees)', amount: (-schedC.turoFees).toFixed(2) },
       { line: 'Line 7', description: 'Gross income (net from Turo)', amount: schedC.netFromTuro.toFixed(2) },
       { line: '', description: '--- DEDUCTIONS ---', amount: '' },
-      { line: 'Line 9', description: 'Car & truck (fuel, registration, parking)', amount: (-schedC.carTruck).toFixed(2) },
-      { line: 'Line 15', description: 'Insurance', amount: (-schedC.insurance).toFixed(2) },
-      { line: 'Line 22', description: 'Repairs & maintenance', amount: (-schedC.repairs).toFixed(2) },
-      { line: 'Line 27a', description: 'Other expenses (cleaning, other)', amount: (-schedC.other).toFixed(2) },
-      { line: 'Line 28', description: 'Total deductions', amount: (-schedC.totalDeductions).toFixed(2) },
-      { line: 'Line 31', description: 'Net profit / loss', amount: (schedC.netProfit).toFixed(2) },
     ]
-    downloadCSV(rows, `turo-schedule-c-${yearFilter}.csv`)
+
+    const deductionRows = deductionMethod === 'standard'
+      ? [
+          { line: 'Line 9', description: `Standard mileage deduction (${totalMiles.toLocaleString()} mi × $${irsRate.toFixed(3)}/mi)`, amount: (-mileageDeduction).toFixed(2) },
+          { line: 'Line 27a', description: 'Other expenses (parking, cleaning, other)', amount: (-otherPlusParking).toFixed(2) },
+          { line: 'Line 28', description: 'Total deductions', amount: (-standardDeductions).toFixed(2) },
+          { line: '', description: 'Note: Insurance and maintenance are included in the standard mileage rate', amount: '' },
+        ]
+      : [
+          { line: 'Line 9', description: 'Car & truck (fuel, registration, parking)', amount: (-carTruck).toFixed(2) },
+          { line: 'Line 15', description: 'Insurance', amount: (-schedCInsurance).toFixed(2) },
+          { line: 'Line 22', description: 'Repairs & maintenance', amount: (-repairs).toFixed(2) },
+          { line: 'Line 27a', description: 'Other expenses (cleaning, other)', amount: (-otherExp).toFixed(2) },
+          { line: 'Line 28', description: 'Total deductions', amount: (-actualDeductions).toFixed(2) },
+          { line: '', description: 'Note: Cannot combine actual expenses with standard mileage deduction', amount: '' },
+        ]
+
+    const profitRow = [
+      { line: 'Line 31', description: 'Net profit / loss', amount: schedC.netProfit.toFixed(2) },
+    ]
+
+    downloadCSV([...incomeRows, ...deductionRows, ...profitRow], `turo-schedule-c-${yearFilter}.csv`)
   }
 
   const fmt = (n: number) => '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 })
   const fmtPct = (n: number) => n.toFixed(1) + '%'
+
+  const standardSavings = standardDeductions - actualDeductions
 
   return (
     <div className="p-4 md:p-7 max-w-5xl mx-auto">
@@ -302,6 +329,80 @@ export default function ReportsPage() {
             </button>
           </div>
           <div className="p-5">
+
+            {/* Deduction method toggle */}
+            <div className="mb-5">
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94A3B8' }}>Vehicle Deduction Method</p>
+              <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid #E2E8F0', width: 'fit-content' }}>
+                <button
+                  onClick={() => setDeductionMethod('standard')}
+                  className="px-4 py-2 text-sm font-medium transition-colors"
+                  style={{
+                    backgroundColor: deductionMethod === 'standard' ? '#1D9E75' : 'white',
+                    color: deductionMethod === 'standard' ? 'white' : '#374151',
+                    borderRight: '1px solid #E2E8F0',
+                  }}>
+                  Standard Mileage
+                </button>
+                <button
+                  onClick={() => setDeductionMethod('actual')}
+                  className="px-4 py-2 text-sm font-medium transition-colors"
+                  style={{
+                    backgroundColor: deductionMethod === 'actual' ? '#1D9E75' : 'white',
+                    color: deductionMethod === 'actual' ? 'white' : '#374151',
+                  }}>
+                  Actual Expenses
+                </button>
+              </div>
+              <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>
+                {deductionMethod === 'standard'
+                  ? `IRS rate: $${irsRate.toFixed(3)}/mi for ${yearFilter}. Covers gas, oil, repairs, insurance & depreciation. Parking fees deducted separately.`
+                  : 'Deduct actual fuel, insurance, maintenance, registration & parking costs. Cannot be combined with standard mileage.'}
+              </p>
+            </div>
+
+            {/* Method comparison callout */}
+            {totalMiles > 0 && (
+              <div className="mb-5 px-4 py-3 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                style={{ backgroundColor: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+                <div className="flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                  </svg>
+                  <span className="text-xs font-semibold" style={{ color: '#0284C7' }}>Method Comparison — {totalMiles.toLocaleString()} business miles logged</span>
+                </div>
+                <div className="flex items-center gap-4 text-xs">
+                  <span style={{ color: '#0369A1' }}>
+                    Standard: <strong>{fmt(standardDeductions)}</strong>
+                  </span>
+                  <span style={{ color: '#0369A1' }}>
+                    Actual: <strong>{fmt(actualDeductions)}</strong>
+                  </span>
+                  {standardSavings !== 0 && (
+                    <span className="px-2 py-0.5 rounded-full font-semibold"
+                      style={{
+                        backgroundColor: standardSavings > 0 ? '#DCFCE7' : '#FEE2E2',
+                        color: standardSavings > 0 ? '#16A34A' : '#DC2626',
+                      }}>
+                      {standardSavings > 0 ? `Standard saves ${fmt(standardSavings)}` : `Actual saves ${fmt(Math.abs(standardSavings))}`}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {totalMiles === 0 && deductionMethod === 'standard' && (
+              <div className="mb-5 px-4 py-3 rounded-xl flex items-center gap-2"
+                style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <span className="text-xs" style={{ color: '#92400E' }}>
+                  No mileage recorded for {yearFilter} trips. Log start/end odometer readings in the Trips section to unlock this deduction.
+                </span>
+              </div>
+            )}
+
             {/* Income section */}
             <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94A3B8' }}>Income</p>
             <div className="space-y-1 mb-4">
@@ -328,26 +429,65 @@ export default function ReportsPage() {
             {/* Deductions section */}
             <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94A3B8' }}>Deductions</p>
             <div className="space-y-1 mb-4">
-              {[
-                { line: 'Line 9', label: 'Car & truck expenses (fuel, registration, parking)', amount: schedC.carTruck },
-                { line: 'Line 15', label: 'Insurance', amount: schedC.insurance },
-                { line: 'Line 22', label: 'Repairs & maintenance', amount: schedC.repairs },
-                { line: 'Line 27a', label: 'Other expenses (cleaning, other)', amount: schedC.other },
-                { line: 'Line 28', label: 'Total deductions', amount: schedC.totalDeductions, bold: true },
-              ].map(r => (
-                <div key={r.line} className="flex items-center justify-between py-1.5 px-3 rounded-lg"
-                  style={{ backgroundColor: r.bold ? '#FFF5F5' : '#F8FAFC' }}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: '#E2E8F0', color: '#64748B', minWidth: 48, textAlign: 'center' }}>
-                      {r.line}
+              {deductionMethod === 'standard' ? (
+                <>
+                  <div className="flex items-center justify-between py-1.5 px-3 rounded-lg" style={{ backgroundColor: '#F8FAFC' }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: '#E2E8F0', color: '#64748B', minWidth: 48, textAlign: 'center' }}>Line 9</span>
+                      <span className="text-sm" style={{ color: '#374151' }}>
+                        Standard mileage ({totalMiles.toLocaleString()} mi × ${irsRate.toFixed(3)})
+                      </span>
+                    </div>
+                    <span className="text-sm font-semibold" style={{ color: mileageDeduction > 0 ? '#DC2626' : '#94A3B8' }}>
+                      {mileageDeduction > 0 ? `−${fmt(mileageDeduction)}` : '—'}
                     </span>
-                    <span className="text-sm" style={{ color: '#374151', fontWeight: r.bold ? 600 : 400 }}>{r.label}</span>
                   </div>
-                  <span className="text-sm font-semibold" style={{ color: r.amount > 0 ? '#DC2626' : '#94A3B8' }}>
-                    {r.amount > 0 ? `−${fmt(r.amount)}` : '—'}
-                  </span>
-                </div>
-              ))}
+                  <div className="flex items-center justify-between py-1.5 px-3 rounded-lg" style={{ backgroundColor: '#F8FAFC' }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: '#E2E8F0', color: '#64748B', minWidth: 48, textAlign: 'center' }}>Line 27a</span>
+                      <span className="text-sm" style={{ color: '#374151' }}>Other expenses (parking, cleaning, other)</span>
+                    </div>
+                    <span className="text-sm font-semibold" style={{ color: otherPlusParking > 0 ? '#DC2626' : '#94A3B8' }}>
+                      {otherPlusParking > 0 ? `−${fmt(otherPlusParking)}` : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-1.5 px-3 rounded-lg" style={{ backgroundColor: '#FFF5F5' }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: '#E2E8F0', color: '#64748B', minWidth: 48, textAlign: 'center' }}>Line 28</span>
+                      <span className="text-sm font-semibold" style={{ color: '#374151' }}>Total deductions</span>
+                    </div>
+                    <span className="text-sm font-semibold" style={{ color: standardDeductions > 0 ? '#DC2626' : '#94A3B8' }}>
+                      {standardDeductions > 0 ? `−${fmt(standardDeductions)}` : '—'}
+                    </span>
+                  </div>
+                  <p className="text-xs px-1 pt-1" style={{ color: '#94A3B8' }}>
+                    Gas, oil, repairs, insurance & depreciation are included in the standard rate.
+                  </p>
+                </>
+              ) : (
+                <>
+                  {[
+                    { line: 'Line 9', label: 'Car & truck (fuel, registration, parking)', amount: carTruck },
+                    { line: 'Line 15', label: 'Insurance', amount: schedCInsurance },
+                    { line: 'Line 22', label: 'Repairs & maintenance', amount: repairs },
+                    { line: 'Line 27a', label: 'Other expenses (cleaning, other)', amount: otherExp },
+                    { line: 'Line 28', label: 'Total deductions', amount: actualDeductions, bold: true },
+                  ].map(r => (
+                    <div key={r.line} className="flex items-center justify-between py-1.5 px-3 rounded-lg"
+                      style={{ backgroundColor: r.bold ? '#FFF5F5' : '#F8FAFC' }}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: '#E2E8F0', color: '#64748B', minWidth: 48, textAlign: 'center' }}>
+                          {r.line}
+                        </span>
+                        <span className="text-sm" style={{ color: '#374151', fontWeight: r.bold ? 600 : 400 }}>{r.label}</span>
+                      </div>
+                      <span className="text-sm font-semibold" style={{ color: r.amount > 0 ? '#DC2626' : '#94A3B8' }}>
+                        {r.amount > 0 ? `−${fmt(r.amount)}` : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
 
             {/* Net profit */}

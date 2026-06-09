@@ -114,11 +114,26 @@ No global store. Each page manages its own state with `useState` + `useEffect` f
 | Guest flagging + AI message templates | `app/guests/page.tsx` |
 | Maintenance tracker | `app/maintenance/page.tsx` |
 | Calendar + trip creation | `app/calendar/page.tsx` |
-| P&L + Schedule C export | `app/reports/page.tsx` |
+| P&L + Schedule C export (mileage deduction) | `app/reports/page.tsx` |
 | AI Fleet Advisor (chat) | `components/ChatPanel.tsx` + `ChatPopup.tsx` |
 | AI daily tips | `components/AITipsPanel.tsx` |
 | Document vault | `app/fleet/page.tsx` (expandable per vehicle) |
 | VIN pre-purchase analysis | `app/vin-lookup/page.tsx` + `app/api/vin/route.ts` |
+
+## Schedule C — Mileage Deduction
+
+The Schedule C section in `app/reports/page.tsx` supports two IRS-compliant deduction methods, toggled by the host in the UI:
+
+**Standard mileage method** (default) — `totalMiles × IRS_RATES[year]`. The `IRS_RATES` constant (module-level) maps year → rate:
+- 2023: $0.655/mi, 2024: $0.670/mi, 2025: $0.700/mi, fallback: $0.700/mi
+
+Line 9 becomes the mileage deduction. Gas, oil, repairs, insurance, and depreciation are included in the rate and suppressed as separate lines. Parking fees and cleaning remain separately deductible on Line 27a.
+
+**Actual expense method** — original behavior: Line 9 (fuel + registration + parking), Line 15 (insurance), Line 22 (maintenance), Line 27a (cleaning + other).
+
+The two methods are mutually exclusive per IRS rules. A comparison callout in the UI shows both totals and which method saves more. If no mileage data is recorded for the selected year, a yellow warning prompts the host to log odometer readings. Mileage is sourced from `trips.miles_added` (already captured in the trip logging flow — no DB changes required). The CSV export branches on the active method and includes a note row identifying which was used.
+
+Do not add a new IRS rate year without also updating `IRS_RATES` in `app/reports/page.tsx`. Do not combine both deduction methods in a single Schedule C export.
 
 ## Maintenance → Expense Auto-Link
 

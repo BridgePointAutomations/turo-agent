@@ -11,6 +11,7 @@ AI-powered Turo business management platform. Built with Next.js 14, Supabase, a
 - **Expense tracking** — categorized expenses with per-vehicle and monthly breakdowns
 - **Guest management** — flag system (great/caution/blocked), notes, AI-powered message templates with richer auto-fill and persistent customization
 - **Maintenance scheduler** — auto-seeded service intervals per vehicle, mark-complete flow
+- **Schedule C tax prep** — per-year P&L with IRS Schedule C summary; toggle between standard mileage deduction (IRS rate × logged business miles) and actual expense method with a side-by-side comparison
 - **Dashboard** — revenue chart, maintenance alerts, fleet overview, inline AI chat
 
 ---
