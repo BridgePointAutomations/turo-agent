@@ -125,11 +125,14 @@ export default function ReportsPage() {
 
   const activeDeductions = deductionMethod === 'standard' ? standardDeductions : actualDeductions
 
+  const schedCGross = filteredTrips.reduce((s, t) => s + Number(t.gross_revenue || 0), 0)
+  const schedCNet   = filteredTrips.reduce((s, t) => s + Number(t.net_revenue   || 0), 0)
+
   const schedC = {
-    grossReceipts: totals.gross,
-    turoFees: totals.turoFees,
-    netFromTuro: totals.netRevenue,
-    netProfit: totals.netRevenue - activeDeductions,
+    grossReceipts: schedCGross,
+    turoFees:      schedCGross - schedCNet,
+    netFromTuro:   schedCNet,
+    netProfit:     schedCNet - activeDeductions,
   }
 
   function exportScheduleC() {
