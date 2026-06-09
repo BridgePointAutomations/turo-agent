@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import type { Trip, Expense, Vehicle } from '@/lib/types'
 import { downloadCSV } from '@/lib/export'
 
-const IRS_RATES: Record<number, number> = { 2023: 0.655, 2024: 0.670, 2025: 0.700 }
+const IRS_RATES: Record<number, number> = { 2023: 0.655, 2024: 0.670, 2025: 0.700, 2026: 0.700 }
 
 export default function ReportsPage() {
   const [trips, setTrips] = useState<Trip[]>([])
@@ -41,8 +41,8 @@ export default function ReportsPage() {
     const vTrips = filteredTrips.filter(t => t.vehicle_id === v.id)
     const vExpenses = filteredExpenses.filter(e => e.vehicle_id === v.id)
     const gross = vTrips.reduce((s, t) => s + Number(t.gross_revenue || 0), 0)
-    const turoFees = vTrips.reduce((s, t) => s + Number(t.gross_revenue || 0) * (Number(t.turo_fee_pct || 25) / 100), 0)
     const netRevenue = vTrips.reduce((s, t) => s + Number(t.net_revenue || 0), 0)
+    const turoFees = gross - netRevenue
     const actualPayouts = vTrips.filter(t => t.actual_payout != null).reduce((s, t) => s + Number(t.actual_payout || 0), 0)
     const expenseTotal = vExpenses.reduce((s, e) => s + Number(e.amount || 0), 0)
     const profit = netRevenue - expenseTotal
@@ -361,7 +361,7 @@ export default function ReportsPage() {
               </div>
               <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>
                 {deductionMethod === 'standard'
-                  ? `IRS rate: $${irsRate.toFixed(3)}/mi for ${yearFilter}. Covers gas, oil, repairs, insurance & depreciation. Parking fees deducted separately.`
+                  ? `IRS rate: $${irsRate.toFixed(3)}/mi for ${yearFilter}${!(yearFilter in IRS_RATES) ? ' (estimated — verify IRS announcement)' : ''}. Covers gas, oil, repairs, insurance & depreciation. Parking fees deducted separately.`
                   : 'Deduct actual fuel, insurance, maintenance, registration & parking costs. Cannot be combined with standard mileage.'}
               </p>
             </div>
