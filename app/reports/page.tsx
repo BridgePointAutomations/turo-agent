@@ -110,8 +110,13 @@ export default function ReportsPage() {
   const otherExp = expByCat(['cleaning', 'other'])
   const actualDeductions = carTruck + schedCInsurance + repairs + otherExp
 
-  // Standard mileage method
-  const totalMiles = filteredTrips.reduce((sum, t) => sum + (t.miles_added ?? 0), 0)
+  // Standard mileage method — fall back to odometer diff when miles_added wasn't stored
+  const totalMiles = filteredTrips.reduce((sum, t) => {
+    const miles = (t.miles_added && t.miles_added > 0)
+      ? t.miles_added
+      : (t.start_mileage != null && t.end_mileage != null ? Math.max(0, t.end_mileage - t.start_mileage) : 0)
+    return sum + miles
+  }, 0)
   const irsRate = IRS_RATES[yearFilter] ?? 0.700
   const mileageDeduction = totalMiles * irsRate
   // Parking fees and cleaning are still separately deductible under standard mileage
