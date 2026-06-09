@@ -120,6 +120,23 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Sync vehicle mileage on edit — mirror POST logic
+  const vehicleId = updates.vehicle_id ?? data?.vehicle_id
+  if (vehicleId) {
+    const endMileage = updates.end_mileage ?? data?.end_mileage
+    const milesAdded = updates.miles_added ?? data?.miles_added
+    if (endMileage) {
+      await supabase.from('fleet').update({ current_mileage: endMileage }).eq('id', vehicleId)
+    } else if (milesAdded) {
+      const { data: vehicle } = await supabase.from('fleet').select('current_mileage').eq('id', vehicleId).single()
+      if (vehicle) {
+        await supabase.from('fleet').update({
+          current_mileage: (vehicle.current_mileage || 0) + milesAdded
+        }).eq('id', vehicleId)
+      }
+    }
+  }
+
   const guestId = updates.guest_id ?? data?.guest_id
   if (guestId) await syncGuestStats(guestId)
 

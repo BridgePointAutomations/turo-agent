@@ -41,7 +41,7 @@ app/
     chat/route.ts           # Streaming SSE chat endpoint
     conversations/          # Conversation CRUD
     fleet/route.ts          # Vehicle CRUD
-    trips/route.ts          # Trip CRUD + line items
+    trips/route.ts          # Trip CRUD + line items; POST and PATCH both sync fleet.current_mileage
     expenses/route.ts       # Expense CRUD (GET, POST, PATCH, DELETE)
     guests/route.ts         # Guest CRUD
     templates/route.ts      # Message template overrides (GET, PATCH — upsert by key)
