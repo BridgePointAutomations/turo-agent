@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 interface Tip {
   category: 'pricing' | 'maintenance' | 'tax' | 'bookings'
@@ -74,10 +74,19 @@ export default function AITipsPanel() {
   const [tips, setTips] = useState<Tip[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [noNewInsights, setNoNewInsights] = useState(false)
+  const shownTitlesRef = useRef<string[]>([])
+
+  useEffect(() => {
+    if (tips.length === 0) return
+    const merged = [...shownTitlesRef.current, ...tips.map(t => t.title)]
+    shownTitlesRef.current = merged.slice(-16)
+  }, [tips])
 
   const fetchTips = useCallback(async (force = false) => {
     setLoading(true)
     setError(false)
+    setNoNewInsights(false)
 
     if (!force) {
       try {
@@ -107,16 +116,28 @@ export default function AITipsPanel() {
       return
     }
 
-    // Force refresh
+    // Force refresh — ask for tips different from what's already shown
     try {
-      const res = await fetch('/api/tips')
+      const res = await fetch('/api/tips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ excludeTitles: shownTitlesRef.current }),
+      })
       if (!res.ok) throw new Error('Failed')
-      const data: Tip[] = await res.json()
-      setTips(data)
-      try {
-        const fingerprint = await getFleetFingerprint()
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ fp: fingerprint, data }))
-      } catch { /* ignore */ }
+      const { tips: data, noNewInsights: fresh }: { tips: Tip[]; noNewInsights: boolean } = await res.json()
+
+      if (Array.isArray(data) && data.length > 0) {
+        setTips(data)
+        setNoNewInsights(false)
+        try {
+          const fingerprint = await getFleetFingerprint()
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ fp: fingerprint, data }))
+        } catch { /* ignore */ }
+      } else if (fresh) {
+        setNoNewInsights(true)
+      } else {
+        setTips([])
+      }
     } catch {
       setError(true)
     } finally {
@@ -147,6 +168,12 @@ export default function AITipsPanel() {
           Refresh
         </button>
       </div>
+
+      {noNewInsights && !loading && !error && (
+        <div className="mx-4 mt-3 px-3 py-2 rounded-lg text-xs" style={{ backgroundColor: '#F8FAFC', border: '1px dashed #E2E8F0', color: '#94A3B8' }}>
+          No new insights since your last refresh — your fleet data hasn't changed enough to surface something different.
+        </div>
+      )}
 
       {/* Body */}
       <div className="p-4 space-y-3">
